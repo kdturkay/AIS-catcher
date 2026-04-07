@@ -17,6 +17,10 @@
 
 #include <cstring>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include "FileRAW.h"
 
 namespace Device
@@ -30,6 +34,21 @@ namespace Device
 
 		try
 		{
+#ifndef _WIN32
+			if (use_raw_stdin)
+			{
+				// Use POSIX read() for stdin: returns as soon as data is available,
+				// avoiding iostream overhead and istream::read blocking for full buffer
+				while (Device::isStreaming())
+				{
+					ssize_t bytesRead = ::read(STDIN_FILENO, buffer.data(), buffer.size());
+					if (bytesRead <= 0) break;
+
+					fifo.Push(buffer.data(), (int)bytesRead, true);
+				}
+			}
+			else
+#endif
 			while (file && Device::isStreaming())
 			{
 
@@ -41,7 +60,7 @@ namespace Device
 					if (bytesRead > 0) {
 						if(bytesRead < buffer.size())
 							std::memset(buffer.data() + bytesRead, 0, buffer.size() - bytesRead);
-	
+
 						fifo.Push(buffer.data(), buffer.size(), true);
 					}
 				}
@@ -125,14 +144,24 @@ namespace Device
 
 		if (is_stdin)
 		{
-			file = &std::cin;
+#ifndef _WIN32
+			if (getFormat() == Format::TXT || getFormat() == Format::BASESTATION)
+			{
+				use_raw_stdin = true;
+				buffer.resize(8192);
+			}
+			else
+#endif
+			{
+				file = &std::cin;
+			}
 		}
 		else
 		{
 			file = new std::ifstream(filename, std::ios::in | std::ios::binary);
 		}
 
-		if (!file || file->fail())
+		if (!use_raw_stdin && (!file || file->fail()))
 			throw std::runtime_error("FILE: Cannot open input.");
 
 		done = false;

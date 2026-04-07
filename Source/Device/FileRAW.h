@@ -33,6 +33,7 @@ namespace Device {
 		bool eoi = false;
 		bool done = false;
 		bool loop = false;
+		bool use_raw_stdin = false;
 
 		FIFO fifo;
 

@@ -33,10 +33,10 @@ namespace IO
 				case MessageFormat::NMEA:
 				case MessageFormat::NMEA_TAG:
 				case MessageFormat::FULL:
-					std::cout << data[i].getNMEA() << std::endl;
+					std::cout << data[i].getNMEA() << '\n';
 					break;
 				default:
-					std::cout << data[i].getJSON() << std::endl;
+					std::cout << data[i].getJSON() << '\n';
 					break;
 				}
 			}
@@ -57,7 +57,7 @@ namespace IO
 				{
 				case MessageFormat::NMEA:
 					for (const auto &s : data[i].NMEA)
-						std::cout << s << std::endl;
+						std::cout << s << '\n';
 					break;
 				case MessageFormat::NMEA_TAG:
 				{
@@ -83,7 +83,7 @@ namespace IO
 						if (data[i].getStation())
 							std::cout << ", ID: " << data[i].getStation();
 
-						std::cout << ")" << std::endl;
+						std::cout << ")\n";
 					}
 					break;
 				case MessageFormat::JSON_NMEA:
