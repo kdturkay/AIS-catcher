@@ -29,9 +29,9 @@ namespace JSON {
 			break;
 		case Value::Type::BOOL:
 			if (data.b)
-			str.append("true", 4);
-		else
-			str.append("false", 5);
+				str.append("true", 4);
+			else
+				str.append("false", 5);
 			break;
 		case Value::Type::INT:
 			str += std::to_string(data.i);
