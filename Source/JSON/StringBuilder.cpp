@@ -27,60 +27,53 @@ namespace JSON {
 
 	void StringBuilder::stringify(const std::string& str, std::string& json, bool esc) {
 		if (esc) json += '\"';
-		for (char c : str) {
-			switch (c) {
-			case '\"':
-				json += "\\\"";
-				break;
-			case '\\':
-				json += "\\\\";
-				break;
-			case '\r':			
-			case '\0':				
-				break;
-			case '\n':
-				json += "\\n";
-				break;
-			default:
-				json += c;
+		const char *s = str.data();
+		size_t len = str.size();
+		size_t start = 0;
+
+		for (size_t i = 0; i < len; i++) {
+			char c = s[i];
+			if (c == '\"' || c == '\\' || c == '\n' || c == '\r' || c == '\0') {
+				if (i > start) json.append(s + start, i - start);
+				if (c == '\"') json.append("\\\"", 2);
+				else if (c == '\\') json.append("\\\\", 2);
+				else if (c == '\n') json.append("\\n", 2);
+				// \r and \0 silently dropped
+				start = i + 1;
 			}
 		}
+		if (len > start) json.append(s + start, len - start);
 		if (esc) json += '\"';
 	}
 
 	void StringBuilder::to_string_enhanced(std::string& json, const Value& v, int key_index) {
 		json += '{';
-		
-		// Add value
-		json += "\"value\":";
+
+		json.append("\"value\":", 8);
 		to_string(json, v);
-		
-		// Add metadata if available
+
 		if (key_index >= 0 && key_index < AIS::KEY_COUNT) {
 			const AIS::KeyInfo& info = AIS::KeyInfoMap[key_index];
-			
-			// Add unit if not empty
-			if (info.unit && strlen(info.unit) > 0) {
-				json += ",\"unit\":";
+
+			if (info.unit && info.unit[0] != '\0') {
+				json.append(",\"unit\":", 8);
 				stringify(info.unit, json);
 			}
-			
-			// Add description if not empty
-			if (info.description && strlen(info.description) > 0) {
-				json += ",\"description\":";
+
+			if (info.description && info.description[0] != '\0') {
+				json.append(",\"description\":", 15);
 				stringify(info.description, json);
 			}
-			
-			// Add lookup value if available
+
 			if (info.lookup_table && (v.isInt() || v.isFloat())) {
 				int numeric_value = v.isInt() ? v.getInt() : static_cast<int>(v.getFloat());
-				if (numeric_value >= 0 && numeric_value < info.lookup_table->size()) {
-					json += ",\"text\":";
+				if (numeric_value >= 0 && numeric_value < (int)info.lookup_table->size()) {
+					json.append(",\"text\":", 8);
 					stringify((*info.lookup_table)[numeric_value], json);
 				}
 			}
 		}
-		
+
 		json += '}';
 	}
 
@@ -145,8 +138,8 @@ namespace JSON {
 				first = false;
 
 				json += '"';
-				json += key;
-				json += "\":";
+				json.append(key);
+				json.append("\":", 2);
 
 				if (stringify_enhanced) {
 					to_string_enhanced(json, p.Get(), p.Key());

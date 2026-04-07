@@ -108,9 +108,9 @@ void PluginManager::addPlugin(const std::string &arg)
 		else
 			throw std::runtime_error("Plugin does not start with // followed by JSON description.");
 
-		std::shared_ptr<JSON::JSON> j = parser.parse(firstline);
+		JSON::Document j = parser.parse(firstline);
 
-		for (const auto &p : j->getProperties())
+		for (const auto &p : j.getProperties())
 		{
 			switch (p.Key())
 			{

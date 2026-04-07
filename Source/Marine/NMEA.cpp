@@ -72,7 +72,7 @@ namespace AIS
 		return lastNumber;
 	}
 
-	int NMEA::NMEAchecksum(std::string s)
+	int NMEA::NMEAchecksum(const std::string &s)
 	{
 		int c = 0;
 		if (s.length() > 4) // Need at least "$X*XX" format
@@ -494,7 +494,7 @@ namespace AIS
 			{
 				// JSON::Parser parser(&AIS::KeyMap, JSON_DICT_FULL);
 				// parser.setSkipUnknown(true);
-				parser.parse_into(jsonBuf, s);
+				parser.parse_into(jsonDoc, s);
 
 				std::string cls = "";
 				std::string dev = "";
@@ -508,7 +508,7 @@ namespace AIS
 				t = 0;
 
 				// phase 1, get the meta data in place
-				for (const auto &p : jsonBuf.getProperties())
+				for (const auto &p : jsonDoc.getProperties())
 				{
 					switch (p.Key())
 					{
@@ -572,7 +572,7 @@ namespace AIS
 					if (dev == "dAISy-catcher" && toa != 0 && !stamp)
 						t = toa;
 
-					for (const auto &p : jsonBuf.getProperties())
+					for (const auto &p : jsonDoc.getProperties())
 					{
 						if (p.Key() == AIS::KEY_NMEA)
 						{
@@ -614,7 +614,7 @@ namespace AIS
 				{
 					float lat = 0, lon = 0;
 
-					for (const auto &p : jsonBuf.getProperties())
+					for (const auto &p : jsonDoc.getProperties())
 					{
 						if (p.Key() == AIS::KEY_LAT)
 						{

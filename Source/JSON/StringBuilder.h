@@ -102,6 +102,7 @@ namespace JSON
 				tmp[len++] = '0' + (int)(v % 10);
 				v /= 10;
 			} while (v);
+
 			if (ptr + len <= end)
 				for (int i = len - 1; i >= 0; i--)
 					*ptr++ = tmp[i];
@@ -121,7 +122,7 @@ namespace JSON
 		{
 			if (v != v)
 			{
-				append("null");
+				append("null", 4);
 				return;
 			}
 
@@ -131,9 +132,15 @@ namespace JSON
 				v = -v;
 			}
 
-			long long scaled = (long long)(v * 1000000.0 + 0.5);
-			long long whole = scaled / 1000000;
-			int frac = (int)(scaled % 1000000);
+			// Avoid 64-bit integer division (catastrophic on 32-bit ARM)
+			long long whole = (long long)v;
+			int frac = (int)((v - (double)whole) * 1000000.0 + 0.5);
+
+			if (frac >= 1000000)
+			{
+				whole++;
+				frac -= 1000000;
+			}
 
 			append_uint((unsigned long long)whole);
 
@@ -157,41 +164,61 @@ namespace JSON
 
 		void append_string_escaped(const std::string &str)
 		{
+			const char *s = str.data();
+			int len = (int)str.size();
+
 			append('"');
-			for (char c : str)
+			const char *start = s;
+			const char *sEnd = s + len;
+			while (s < sEnd)
 			{
-				switch (c)
+				char c = *s;
+				if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\0')
 				{
-				case '\"':
-					append("\\\"");
-					break;
-				case '\\':
-					append("\\\\");
-					break;
-				case '\r':
-				case '\0':
-					break;
-				case '\n':
-					append("\\n");
-					break;
-				default:
-					append(c);
+					if (s > start)
+						append(start, (int)(s - start));
+					if (c == '"')
+						append("\\\"", 2);
+					else if (c == '\\')
+						append("\\\\", 2);
+					else if (c == '\n')
+						append("\\n", 2);
+					// \r and \0 are silently dropped
+					start = ++s;
+				}
+				else
+				{
+					s++;
 				}
 			}
+			if (s > start)
+				append(start, (int)(s - start));
 			append('"');
 		}
 
 		void write_value(const Value &v)
 		{
-			if (v.isString())
+			switch (v.getType())
 			{
-				append_string_escaped(v.getString());
-			}
-			else if (v.isObject())
-			{
+			case Value::Type::STRING:
+				append_string_escaped(v.getStringRef());
+				break;
+			case Value::Type::INT:
+				append_int(v.getInt());
+				break;
+			case Value::Type::FLOAT:
+				append_float(v.getFloat());
+				break;
+			case Value::Type::BOOL:
+				if (v.getBool())
+					append("true", 4);
+				else
+					append("false", 5);
+				break;
+			case Value::Type::OBJECT:
 				write_object(v.getObject());
-			}
-			else if (v.isArrayString())
+				break;
+			case Value::Type::ARRAY_STRING:
 			{
 				const std::vector<std::string> &as = v.getStringArray();
 				append('[');
@@ -202,8 +229,9 @@ namespace JSON
 					append_string_escaped(as[i]);
 				}
 				append(']');
+				break;
 			}
-			else if (v.isArray())
+			case Value::Type::ARRAY:
 			{
 				const std::vector<Value> &a = v.getArray();
 				append('[');
@@ -214,22 +242,11 @@ namespace JSON
 					write_value(a[i]);
 				}
 				append(']');
+				break;
 			}
-			else if (v.isInt())
-			{
-				append_int(v.getInt());
-			}
-			else if (v.isFloat())
-			{
-				append_float(v.getFloat());
-			}
-			else if (v.isBool())
-			{
-				append(v.getBool() ? "true" : "false");
-			}
-			else
-			{
-				append("null");
+			default:
+				append("null", 4);
+				break;
 			}
 		}
 
@@ -252,7 +269,7 @@ namespace JSON
 
 				append('"');
 				append(key);
-				append("\":");
+				append("\":", 2);
 				write_value(p.Get());
 			}
 			append('}');

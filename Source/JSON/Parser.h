@@ -59,7 +59,7 @@ namespace JSON
 		int dict = 0;
 		bool skipUnknownKeys = false;
 
-		std::string json;
+		const char *p_start = nullptr;
 		const char *p = nullptr;
 		const char *pend = nullptr;
 
@@ -106,9 +106,8 @@ namespace JSON
 		void must_match(TokenType t, const std::string &err);
 		int search();
 		std::string tokenString() const;
-		std::shared_ptr<JSON> parse_core();
-		void parse_into_core(JSON *o);
-		Value parse_value(JSON *);
+		void parse_into_core(JSON *o, Pool *pool);
+		Value parse_value(Pool *pool);
 		void skip_value();
 
 		static KeyHashTable keyLookup; // INPUT only
@@ -148,8 +147,9 @@ namespace JSON
 
 		Parser(int d = JSON_DICT_FULL) : dict(d) {}
 
-		std::shared_ptr<JSON> parse(const std::string &j);
-		void parse_into(JSON &target, const std::string &j);
+		Document parse(const std::string &j);
+		void parse_into(JSON &target, Pool &pool, const std::string &j);
+		void parse_into(Document &doc, const std::string &j) { parse_into(doc.root, doc.pool, j); }
 		void setSkipUnknown(bool b) { skipUnknownKeys = b; }
 		void setMap(int d)
 		{

@@ -908,7 +908,7 @@ namespace AIS
 		json.Add(AIS::KEY_DEVICE, &device);
 		json.Add(AIS::KEY_VERSION, tag.version);
 		json.Add(AIS::KEY_DRIVER, (int)tag.driver);
-		json.Add(AIS::KEY_HARDWARE, tag.hardware);
+		json.Add(AIS::KEY_HARDWARE, &tag.hardware);
 
 		if (tag.mode & 2)
 		{

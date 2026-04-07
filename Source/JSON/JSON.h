@@ -20,7 +20,6 @@
 #include <vector>
 #include <deque>
 #include <iostream>
-#include <memory>
 
 #include "Common.h"
 
@@ -33,7 +32,7 @@ namespace JSON
 	// JSON value item, 8 bytes (32 bits), 16 bytes (64 bits)
 	class Value
 	{
-
+	public:
 		enum class Type
 		{
 			BOOL,
@@ -44,7 +43,10 @@ namespace JSON
 			ARRAY_STRING,
 			ARRAY,
 			EMPTY
-		} type;
+		};
+
+	private:
+		Type type;
 
 		union Data
 		{
@@ -64,8 +66,10 @@ namespace JSON
 		const std::vector<std::string> &getStringArray() const { return *data.as; }
 		const std::vector<Value> &getArray() const { return *data.a; }
 		const std::string getString() const { return isString() ? *data.s : std::string(""); }
+		const std::string &getStringRef() const { return *data.s; }
 		const JSON &getObject() const { return *data.o; }
 
+		Type getType() const { return type; }
 		const bool isObject() const { return type == Type::OBJECT; }
 		const bool isBool() const { return type == Type::BOOL; }
 		const bool isArray() const { return type == Type::ARRAY; }
@@ -173,20 +177,57 @@ namespace JSON
 		const Value &Get() const { return value; }
 	};
 
-	class JSON
+	// Flat pool: owns all strings, arrays, and nested JSON objects
+	class Pool
 	{
-		friend class Parser;
-
-	private:
-		std::vector<Property> properties;
-
-		// deque for pointer stability: push_back never invalidates existing references
-		std::vector<std::shared_ptr<JSON>> objects;
+		std::deque<JSON> objects;
 		std::deque<std::string> strings;
 		std::deque<std::vector<Value>> arrays;
 
+		size_t objectCount = 0;
 		size_t stringCount = 0;
 		size_t arrayCount = 0;
+
+	public:
+		JSON *addObject();
+
+		std::string *addString(const std::string &v)
+		{
+			if (stringCount < strings.size())
+				strings[stringCount] = v;
+			else
+				strings.push_back(v);
+			return &strings[stringCount++];
+		}
+
+		std::vector<Value> *addArray()
+		{
+			if (arrayCount < arrays.size())
+			{
+				arrays[arrayCount].clear();
+			}
+			else
+			{
+				arrays.push_back(std::vector<Value>());
+			}
+			return &arrays[arrayCount++];
+		}
+
+		void clear()
+		{
+			objectCount = 0;
+			stringCount = 0;
+			arrayCount = 0;
+		}
+	};
+
+	class JSON
+	{
+		friend class Parser;
+		friend class Pool;
+
+	private:
+		std::vector<Property> properties;
 
 	public:
 		void *binary = NULL;
@@ -194,9 +235,6 @@ namespace JSON
 		void clear()
 		{
 			properties.clear();
-			objects.clear();
-			stringCount = 0;
-			arrayCount = 0;
 		}
 
 		const std::vector<Property> &getProperties() const { return properties; }
@@ -227,15 +265,14 @@ namespace JSON
 			properties.push_back(Property(p, (bool)v));
 		}
 
-		void Add(int p, std::shared_ptr<JSON> &v)
+		void Add(int p, JSON *v)
 		{
-			objects.push_back(v);
-			properties.push_back(Property(p, (JSON *)v.get()));
+			properties.push_back(Property(p, v));
 		}
 
-		void Add(int p, const std::string &v)
+		void Add(int p, const std::string &v, Pool &pool)
 		{
-			properties.push_back(Property(p, addString(v)));
+			properties.push_back(Property(p, pool.addString(v)));
 		}
 
 		void Add(int p)
@@ -258,27 +295,30 @@ namespace JSON
 		{
 			properties.push_back(Property(p, (std::vector<std::string> *)v));
 		}
+	};
 
-		std::string *addString(const std::string &v)
+	// Pool::addObject defined after JSON is complete
+	inline JSON *Pool::addObject()
+	{
+		if (objectCount < objects.size())
+			objects[objectCount].clear();
+		else
+			objects.emplace_back();
+		return &objects[objectCount++];
+	}
+
+	// Document: owns a root JSON and its pool
+	struct Document
+	{
+		Pool pool;
+		JSON root;
+
+		void clear()
 		{
-			if (stringCount < strings.size())
-				strings[stringCount] = v;
-			else
-				strings.push_back(v);
-			return &strings[stringCount++];
+			pool.clear();
+			root.clear();
 		}
 
-		std::vector<Value> *addArray()
-		{
-			if (arrayCount < arrays.size())
-			{
-				arrays[arrayCount].clear();
-			}
-			else
-			{
-				arrays.push_back(std::vector<Value>());
-			}
-			return &arrays[arrayCount++];
-		}
+		const std::vector<Property> &getProperties() const { return root.getProperties(); }
 	};
 }

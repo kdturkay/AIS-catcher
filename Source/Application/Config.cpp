@@ -396,10 +396,10 @@ void Config::set(const std::string &str)
 	int version = 0;
 
 	JSON::Parser parser(JSON_DICT_SETTING);
-	std::shared_ptr<JSON::JSON> json = parser.parse(str);
+	JSON::Document doc = parser.parse(str);
 
 	// loop over all properties
-	const std::vector<JSON::Property> &props = json->getProperties();
+	const std::vector<JSON::Property> &props = doc.getProperties();
 
 	// pass 1
 	for (const auto &p : props)

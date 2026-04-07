@@ -94,7 +94,7 @@ namespace AIS
 		bool isHEX(char c) { return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'); }
 		int fromHEX(char c) { return (c >= '0' && c <= '9') ? (c - '0') : ((c >= 'A' && c <= 'F') ? (c - 'A' + 10) : (c - 'a' + 10)); }
 
-		int NMEAchecksum(std::string s);
+		int NMEAchecksum(const std::string &s);
 
 		float GpsToDecimal(const char *, char, bool &error);
 
@@ -107,7 +107,7 @@ namespace AIS
 		bool includeGPS = true;
 
 		JSON::Parser parser;
-		JSON::JSON jsonBuf;
+		JSON::Document jsonDoc;
 
 		void split(const std::string &);
 		std::string trim(const std::string &);
@@ -137,7 +137,7 @@ namespace AIS
 		void setVDO(bool b) { VDO = b; }
 		bool getVDO() { return VDO; }
 		void setUUID(const std::string &u) { uuid = u; }
-		std::string getUUID() { return uuid; }
+		const std::string &getUUID() { return uuid; }
 
 		void setStation(int s) { station = s; }
 		int getStation() { return station; }
