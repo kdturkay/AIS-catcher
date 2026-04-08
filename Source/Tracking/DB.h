@@ -64,7 +64,7 @@ class DB : public StreamIn<JSON::JSON>,
 		   public StreamOut<JSON::JSON>
 {
 
-	JSON::StringBuilder builder{JSON_DICT_FULL};
+	JSON::Serializer builder{JSON_DICT_FULL};
 	char jsonBuf[4096];
 
 	int first, last, count, path_idx = 0;
@@ -100,7 +100,7 @@ class DB : public StreamIn<JSON::JSON>,
 	int findShip(uint32_t mmsi);
 	int createShip(int hash);
 	void moveShipToFront(int);
-	bool updateFields(const JSON::Property &p, const AIS::Message *msg, Ship &v, bool allowApproximate, bool &staticUpdated);
+	bool updateFields(const JSON::Member &p, const AIS::Message *msg, Ship &v, bool allowApproximate, bool &staticUpdated);
 
 	bool updateShip(const JSON::JSON &, TAG &, Ship &);
 	void addToPath(int ptr);

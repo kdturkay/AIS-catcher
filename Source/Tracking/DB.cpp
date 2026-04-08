@@ -773,7 +773,7 @@ void DB::addToPath(int ptr)
 	path_idx = (path_idx + 1) % Npaths;
 }
 
-bool DB::updateFields(const JSON::Property &p, const AIS::Message *msg, Ship &v, bool allowApproximate, bool &staticUpdated)
+bool DB::updateFields(const JSON::Member &p, const AIS::Message *msg, Ship &v, bool allowApproximate, bool &staticUpdated)
 {
 	bool position_updated = false;
 	switch (p.Key())
@@ -984,7 +984,7 @@ bool DB::updateShip(const JSON::JSON &data, TAG &tag, Ship &ship)
 		ship.orOpChannels(1 << (msg->getChannel() - 'A'));
 
 	bool staticUpdated = false;
-	for (const auto &p : data.getProperties())
+	for (const auto &p : data.getMembers())
 		positionUpdated |= updateFields(p, msg, ship, allowApproxLatLon, staticUpdated);
 
 	ship.setType();
@@ -1027,7 +1027,7 @@ void DB::processBinaryMessage(const JSON::JSON &data, Ship &ship, bool &position
 	binmsg.type = type;
 
 	// Extract DAC and FI from message
-	for (const auto &p : data.getProperties())
+	for (const auto &p : data.getMembers())
 	{
 		if (p.Key() == AIS::KEY_DAC)
 		{

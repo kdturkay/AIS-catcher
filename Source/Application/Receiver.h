@@ -126,16 +126,6 @@ public:
 		return *this;
 	}
 
-	const std::vector<AIS::Keys> &getAcceptedKeys() const override
-	{
-		static const std::vector<AIS::Keys> keys = {
-			AIS::KEY_SETTING_VERBOSE, AIS::KEY_SETTING_CHANNEL,
-			AIS::KEY_SETTING_META, AIS::KEY_SETTING_OWN_MMSI,
-			AIS::KEY_SETTING_SERIAL, AIS::KEY_SETTING_INPUT,
-			AIS::KEY_SETTING_SAMPLE_RATE, AIS::KEY_SETTING_BANDWIDTH,
-			AIS::KEY_SETTING_FREQOFFSET, AIS::KEY_SETTING_LAT, AIS::KEY_SETTING_LON};
-		return keys;
-	}
 
 	// Model
 	void setChannel(std::string mode, std::string NMEA);

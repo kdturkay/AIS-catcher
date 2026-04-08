@@ -42,6 +42,11 @@ namespace Device {
 
 	void SOAPYSDR::Close() {
 		Device::Close();
+
+		if (dev != NULL && !skip_unmake) {
+			SoapySDR::Device::unmake(dev);
+		}
+		dev = NULL;
 	}
 
 	void SOAPYSDR::Play() {
@@ -78,6 +83,7 @@ namespace Device {
 
 		if (dev != NULL && !skip_unmake) {
 			SoapySDR::Device::unmake(dev);
+			dev = NULL;
 		}
 	}
 
@@ -95,24 +101,27 @@ namespace Device {
 			return;
 		}
 
-		const int BUFFER_SIZE = dev->getStreamMTU(stream);
+		const int mtu = dev->getStreamMTU(stream);
 
-		std::vector<CFLOAT32> input(BUFFER_SIZE);
+		std::vector<CFLOAT32> input(mtu);
 		void* buffers[] = { input.data() };
 		long long timeNs = 0;
 		const long timeout_us = 1000000;
 		int flags = 0;
 
+		bool activated = false;
 		try {
 			dev->activateStream(stream);
+			activated = true;
 
 			while (isStreaming()) {
-				int ret = dev->readStream(stream, buffers, BUFFER_SIZE, flags, timeNs, timeout_us);
+				int ret = dev->readStream(stream, buffers, mtu, flags, timeNs, timeout_us);
 
 				if (ret < 0) {
 					Error()  << "SOAPYSDR: error reading stream: " << SoapySDR_errToStr(ret) << std::endl;
 					lost = true;
 					skip_unmake = true;
+					break;
 				}
 				if (ret > 0 && isStreaming() && !fifo.Push((char*)input.data(), ret * sizeof(CFLOAT32)))
 					Error()  << "SOAPYSDR: buffer overrun." << std::endl;
@@ -122,9 +131,11 @@ namespace Device {
 			Error()  << "SOAPYSDR: exception " << e.what() << std::endl;
 			lost = true;
 		}
-		flags = 0;
-		timeNs = 0;
-		dev->deactivateStream(stream, flags, timeNs);
+		if (activated) {
+			flags = 0;
+			timeNs = 0;
+			dev->deactivateStream(stream, flags, timeNs);
+		}
 		dev->closeStream(stream);
 
 		// did we terminate too early?
@@ -168,7 +179,7 @@ namespace Device {
 				dev->setBandwidth(SOAPY_SDR_RX, channel, tuner_bandwidth);
 		}
 		catch (std::exception& e) {
-			throw std::runtime_error("SOAPYSDR: cannot set SoapySDR parameters.");
+			throw std::runtime_error("SOAPYSDR: cannot set parameters: " + std::string(e.what()));
 		}
 	}
 
@@ -199,6 +210,7 @@ namespace Device {
 				SoapySDR::Device::unmake(device);
 			}
 			catch (const std::exception& ex) {
+				Warning() << "SOAPYSDR: skipping device: " << ex.what();
 			}
 		}
 	}

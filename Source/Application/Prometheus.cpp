@@ -61,13 +61,26 @@ void PrometheusCounter::Add(const AIS::Message &m, const TAG &tag, bool new_vess
 	if (tag.shipclass < 0 || tag.shipclass > 13)
 		return;
 
-	std::string speed = tag.speed < 0 ? "Unknown" : (tag.speed > 0.5 ? "Moving" : "Stationary");
+	const char *speed = tag.speed < 0 ? "Unknown" : (tag.speed > 0.5 ? "Moving" : "Stationary");
+	char ch = m.getChannel();
+
+	auto labels = [&](std::string &out) {
+		out += "type=\"" + std::to_string(m.type()) + "\",mmsi=\"" + std::to_string(m.mmsi()) + "\",station_id=\"" + std::to_string(m.getStation()) + "\",speed=\"" + speed + "\",shipclass=\"" + ShippingClassNames[tag.shipclass] + "\",channel=\"" + std::string(1, ch) + "\"";
+	};
 
 	if (tag.ppm < 1000)
-		ppm += "ais_msg_ppm{type=\"" + std::to_string(m.type()) + "\",mmsi=\"" + std::to_string(m.mmsi()) + "\",station_id=\"" + std::to_string(m.getStation()) + "\",speed=\"" + speed + "\",shipclass=\"" + ShippingClassNames[tag.shipclass] + "\",channel=\"" + std::string(1, m.getChannel()) + "\"} " + std::to_string(tag.ppm) + "\n";
+	{
+		ppm += "ais_msg_ppm{";
+		labels(ppm);
+		ppm += "} " + std::to_string(tag.ppm) + "\n";
+	}
 
 	if (tag.level < 1000)
-		level += "ais_msg_level{type=\"" + std::to_string(m.type()) + "\",mmsi=\"" + std::to_string(m.mmsi()) + "\",station_id=\"" + std::to_string(m.getStation()) + "\",speed=\"" + speed + "\",shipclass=\"" + ShippingClassNames[tag.shipclass] + "\",channel=\"" + std::string(1, m.getChannel()) + "\"} " + std::to_string(tag.level) + "\n";
+	{
+		level += "ais_msg_level{";
+		labels(level);
+		level += "} " + std::to_string(tag.level) + "\n";
+	}
 
 	_count++;
 	_msg[m.type() - 1]++;
@@ -85,14 +98,10 @@ void PrometheusCounter::Receive(const JSON::JSON *json, int len, TAG &tag)
 {
 	AIS::Message &data = *((AIS::Message *)json[0].binary);
 
-	if (ppm.size() > 32768 || level.size() > 32768)
-	{
-		return;
-	}
-
 	m.lock();
 
-	Add(data, tag);
+	if (ppm.size() <= 32768 && level.size() <= 32768)
+		Add(data, tag);
 
 	m.unlock();
 }

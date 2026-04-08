@@ -40,7 +40,7 @@ namespace IO
 		std::string json;
 		char jsonBuf[4096];
 		AIS::Filter filter;
-		JSON::StringBuilder builder{JSON_DICT_FULL};
+		JSON::Serializer builder{JSON_DICT_FULL};
 
 		OutputStats stats;
 		std::string description, type;

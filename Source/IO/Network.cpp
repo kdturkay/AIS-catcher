@@ -209,6 +209,7 @@ namespace IO
 			break;
 		case AIS::KEY_SETTING_ID:
 		case AIS::KEY_SETTING_CALLSIGN:
+		case AIS::KEY_SETTING_STATIONID:
 			stationid = JSON::stringify(arg);
 			break;
 		case AIS::KEY_SETTING_INTERVAL:

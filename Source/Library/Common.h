@@ -271,11 +271,6 @@ struct Setting
 	virtual std::string Get() { return ""; }
 
 	const std::string &getName() const { return setting_name; }
-	virtual const std::vector<AIS::Keys> &getAcceptedKeys() const
-	{
-		static const std::vector<AIS::Keys> empty;
-		return empty;
-	}
 };
 
 template <typename T>

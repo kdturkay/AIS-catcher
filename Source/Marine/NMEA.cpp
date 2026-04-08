@@ -579,7 +579,7 @@ namespace AIS
 				t = 0;
 
 				// phase 1, get the meta data in place
-				for (const auto &p : jsonDoc.getProperties())
+				for (const auto &p : jsonDoc.getMembers())
 				{
 					switch (p.Key())
 					{
@@ -643,7 +643,7 @@ namespace AIS
 					if (dev == "dAISy-catcher" && toa != 0 && !stamp)
 						t = toa;
 
-					for (const auto &p : jsonDoc.getProperties())
+					for (const auto &p : jsonDoc.getMembers())
 					{
 						if (p.Key() == AIS::KEY_NMEA)
 						{
@@ -685,7 +685,7 @@ namespace AIS
 				{
 					float lat = 0, lon = 0;
 
-					for (const auto &p : jsonDoc.getProperties())
+					for (const auto &p : jsonDoc.getMembers())
 					{
 						if (p.Key() == AIS::KEY_LAT)
 						{

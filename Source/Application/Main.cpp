@@ -219,22 +219,6 @@ static void printBuildConfiguration()
 // -------------------------------
 // Command line support functions
 
-static std::string formatAcceptedKeys(const Setting &s)
-{
-	std::string msg;
-	const auto &accepted = s.getAcceptedKeys();
-	if (!accepted.empty())
-	{
-		msg += " Accepted: ";
-		for (size_t i = 0; i < accepted.size(); i++)
-		{
-			if (i > 0) msg += ", ";
-			msg += AIS::KeyMap[accepted[i]][JSON_DICT_SETTING];
-		}
-		msg += ".";
-	}
-	return msg;
-}
 
 static void parseSettings(Setting &s, char *argv[], int ptr, int argc)
 {
@@ -267,7 +251,7 @@ static void parseSettings(Setting &s, char *argv[], int ptr, int argc)
 		}
 		catch (const std::exception &e)
 		{
-			std::string msg = e.what() + formatAcceptedKeys(s);
+			std::string msg = e.what();
 			if (!flag_context.empty())
 				msg += " (in " + flag_context + " " + option + " " + arg + ")";
 

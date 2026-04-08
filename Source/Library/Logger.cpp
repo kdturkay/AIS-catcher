@@ -38,21 +38,21 @@
 #include "Convert.h"
 #include "StringBuilder.h"
 
-std::unique_ptr<Logger> Logger::instance_ = nullptr;
 
 #ifdef HASSYSLOG
 #include <syslog.h>
 class SyslogHandler
 {
+	static std::string ident_;
 public:
-	SyslogHandler(std::string ident = "aiscatcher")
+	SyslogHandler(const std::string &ident = "aiscatcher")
 	{
-		openlog(ident.c_str(), LOG_PID, LOG_USER);
+		ident_ = ident;
+		openlog(ident_.c_str(), LOG_PID, LOG_USER);
 	}
 
 	~SyslogHandler()
 	{
-		closelog();
 	}
 
 	void operator()(const LogMessage &msg)
@@ -79,6 +79,7 @@ public:
 		syslog(priority, "%s", msg.message.c_str());
 	}
 };
+std::string SyslogHandler::ident_;
 #else
 class SyslogHandler
 {
@@ -129,10 +130,8 @@ std::string LogMessage::toJSON() const
 
 Logger &Logger::getInstance()
 {
-	static std::once_flag onceFlag;
-	std::call_once(onceFlag, [&]()
-				   { instance_.reset(new Logger()); });
-	return *instance_;
+	static Logger instance;
+	return instance;
 }
 
 Setting &Logger::SetKey(AIS::Keys key, const std::string &arg)
@@ -209,10 +208,10 @@ std::vector<LogMessage> Logger::getLastMessages(int n)
 {
 	std::lock_guard<std::mutex> lock(mutex_);
 
-	n = MIN(n, message_buffer_.size());
+	n = MIN(n, (int)message_buffer_.size());
 
 	std::vector<LogMessage> result;
-	if (!message_buffer_.size())
+	if (n <= 0 || message_buffer_.empty())
 	{
 		return result;
 	}
@@ -258,18 +257,26 @@ void Logger::removeLogListener(int id)
 
 void Logger::notifyListeners(const LogMessage &msg)
 {
-	static std::atomic<bool> in_notify(false);
-	bool is_notifying = in_notify.exchange(true);
-	
-    if(is_notifying) return;
+	thread_local bool in_notify = false;
 
+	if (in_notify) return;
+
+	in_notify = true;
 	std::lock_guard<std::mutex> lock(mutex_);
 
-	for (const auto &listener : log_listeners_)
+	try
 	{
-		listener.callback(msg);
+		for (const auto &listener : log_listeners_)
+		{
+			listener.callback(msg);
+		}
 	}
-	in_notify.store(false);
+	catch (...)
+	{
+		in_notify = false;
+		throw;
+	}
+	in_notify = false;
 }
 
 void Logger::log(LogLevel level, const std::string &message)
@@ -285,13 +292,16 @@ void Logger::log(LogLevel level, const std::string &message)
 }
 
 LogStream::LogStream(LogLevel level)
-	: level_(level), stream_(new std::ostringstream())
+	: level_(level)
 {
+	if (level_ >= Logger::getInstance().getMinLevel())
+		stream_.reset(new std::ostringstream());
 }
 
 LogStream::~LogStream()
 {
-	Logger::getInstance().log(level_, stream_->str());
+	if (stream_)
+		Logger::getInstance().log(level_, stream_->str());
 }
 
 // Convenience functions

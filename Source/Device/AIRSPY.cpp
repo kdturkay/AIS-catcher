@@ -85,6 +85,7 @@ namespace Device
 	{
 		Device::Close();
 		airspy_close(dev);
+		dev = nullptr;
 	}
 
 	void AIRSPY::Play()
@@ -241,8 +242,7 @@ namespace Device
 			setMixer_AGC((int)mixer_AGC);
 			break;
 		}
-		if (bias_tee)
-			setBiasTee(true);
+		setBiasTee(bias_tee);
 
 		if (airspy_set_samplerate(dev, sample_rate) != AIRSPY_SUCCESS)
 			throw std::runtime_error("AIRSPY: cannot set sample rate.");

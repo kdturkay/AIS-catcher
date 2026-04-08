@@ -115,7 +115,7 @@ void PluginManager::addPlugin(const std::string &arg)
 
 		JSON::Document j = parser.parse(firstline);
 
-		for (const auto &p : j.getProperties())
+		for (const auto &p : j.getMembers())
 		{
 			switch (p.Key())
 			{
@@ -278,14 +278,14 @@ std::string WebViewer::decodeNMEAtoJSON(const std::string &nmea_input, bool enha
 	public:
 		AIS::NMEA nmea_decoder;
 		AIS::JSONAIS json_converter;
-		JSON::StringBuilder *builder;
+		JSON::Serializer *builder;
 		char jsonBuf[4096];
 		std::string result;
 		bool first;
 		size_t message_count;
 		const size_t MAX_OUTPUT_SIZE;
 
-		NMEADecoder(JSON::StringBuilder *b) : builder(b), first(true), message_count(0), MAX_OUTPUT_SIZE(1024 * 1024)
+		NMEADecoder(JSON::Serializer *b) : builder(b), first(true), message_count(0), MAX_OUTPUT_SIZE(1024 * 1024)
 		{
 			nmea_decoder >> json_converter;
 			json_converter.out.Connect(this);
@@ -321,7 +321,7 @@ std::string WebViewer::decodeNMEAtoJSON(const std::string &nmea_input, bool enha
 		}
 	};
 
-	JSON::StringBuilder builder(JSON_DICT_FULL);
+	JSON::Serializer builder(JSON_DICT_FULL);
 	builder.setStringifyEnhanced(enhanced);
 	NMEADecoder decoder(&builder);
 	return decoder.decode(nmea_input);
@@ -1238,6 +1238,7 @@ Setting &WebViewer::SetKey(AIS::Keys key, const std::string &arg)
 	case AIS::KEY_SETTING_CONTEXT:
 		pluginManager.setContext(arg);
 		break;
+	case AIS::KEY_SETTING_MESSAGE:
 	case AIS::KEY_SETTING_MSG:
 		tracking.msg_save = Util::Parse::Switch(arg);
 		pluginManager.setMsgSave(tracking.msg_save);

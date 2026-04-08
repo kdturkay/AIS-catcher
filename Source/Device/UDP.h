@@ -52,8 +52,8 @@ namespace Device {
 		std::string port;
 		std::string server;
 
-		struct addrinfo* address;
-		SOCKET sock;
+		struct addrinfo* address = nullptr;
+		SOCKET sock = -1;
 		bool lost = false;
 
 		std::thread run_thread;
@@ -65,7 +65,7 @@ namespace Device {
 
 	public:
 		UDP() : Device(Format::TXT, 0, Type::UDP, "UDP") {};
-		~UDP() {};
+		~UDP() { StopServer(); }
 
 		// Control
 		void Close();

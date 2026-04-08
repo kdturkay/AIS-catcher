@@ -39,7 +39,7 @@ namespace JSON
 		return s;
 	}
 
-	class StringBuilder
+	class Serializer
 	{
 	private:
 		int dict = 0;
@@ -270,7 +270,7 @@ namespace JSON
 		{
 			bool first = true;
 			append('{');
-			for (const Property &p : object.getProperties())
+			for (const Member &p : object.getMembers())
 			{
 				if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
 					continue;
@@ -296,7 +296,7 @@ namespace JSON
 		}
 
 	public:
-		StringBuilder(int d = JSON_DICT_FULL) : dict(d) {}
+		Serializer(int d = JSON_DICT_FULL) : dict(d) {}
 
 		int stringify(const JSON &object, char *buffer, int length, const char *suffix = nullptr)
 		{

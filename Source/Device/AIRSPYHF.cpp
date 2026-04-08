@@ -53,7 +53,7 @@ namespace Device
 		uint32_t nRates;
 		airspyhf_get_samplerates(dev, &nRates, 0);
 		if (nRates == 0)
-			throw std::runtime_error("AIRSPY: cannot get allowed sample rates.");
+			throw std::runtime_error("AIRSPYHF: cannot get allowed sample rates.");
 
 		rates.resize(nRates);
 		airspyhf_get_samplerates(dev, rates.data(), nRates);
@@ -76,6 +76,7 @@ namespace Device
 	{
 		Device::Close();
 		airspyhf_close(dev);
+		dev = nullptr;
 	}
 
 	void AIRSPYHF::Play()
@@ -132,6 +133,8 @@ namespace Device
 	{
 		std::vector<uint64_t> serials;
 		int device_count = airspyhf_list_devices(0, 0);
+		if (device_count <= 0)
+			return;
 
 		serials.resize(device_count);
 
@@ -144,21 +147,23 @@ namespace Device
 
 	bool AIRSPYHF::isStreaming()
 	{
-		if (Device::isStreaming() && airspyhf_is_streaming(dev) != 1)
+		if (!Device::isStreaming())
+			return false;
+
+		bool active = airspyhf_is_streaming(dev) == 1;
+		if (!active && !lost)
 		{
 			lost = true;
 			Warning() << "AIRSPYHF: device stopped streaming.";
 		}
-
-		return Device::isStreaming() && airspyhf_is_streaming(dev) == 1;
+		return active;
 	}
 
 	void AIRSPYHF::applySettings()
 	{
 		setAGC();
 		setThreshold(threshold_high ? 1 : 0);
-		if (preamp)
-			setLNA(1);
+		setLNA(preamp ? 1 : 0);
 
 		if (airspyhf_set_samplerate(dev, sample_rate) != AIRSPYHF_SUCCESS)
 			throw std::runtime_error("AIRSPYHF: cannot set sample rate.");

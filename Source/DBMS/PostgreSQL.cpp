@@ -179,259 +179,99 @@ namespace IO
 	}
 
 #ifdef HASPSQL
-	std::string PostgreSQL::addVesselPosition(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s)
+
+	// Key sets for each table
+	static const int keys_vessel_pos[] = {AIS::KEY_LAT, AIS::KEY_LON, AIS::KEY_MMSI, AIS::KEY_STATUS, AIS::KEY_TURN, AIS::KEY_HEADING, AIS::KEY_COURSE, AIS::KEY_SPEED};
+	static const int keys_vessel_static[] = {AIS::KEY_MMSI, AIS::KEY_IMO, AIS::KEY_SHIPNAME, AIS::KEY_CALLSIGN, AIS::KEY_TO_BOW, AIS::KEY_TO_STERN, AIS::KEY_TO_STARBOARD, AIS::KEY_TO_PORT, AIS::KEY_DRAUGHT, AIS::KEY_SHIPTYPE, AIS::KEY_DESTINATION, AIS::KEY_ETA};
+	static const int keys_basestation[] = {AIS::KEY_LAT, AIS::KEY_LON, AIS::KEY_MMSI};
+	static const int keys_sar[] = {AIS::KEY_LAT, AIS::KEY_LON, AIS::KEY_ALT, AIS::KEY_COURSE, AIS::KEY_MMSI, AIS::KEY_SPEED};
+	static const int keys_aton[] = {AIS::KEY_LAT, AIS::KEY_LON, AIS::KEY_NAME, AIS::KEY_TO_BOW, AIS::KEY_TO_STERN, AIS::KEY_TO_STARBOARD, AIS::KEY_TO_PORT, AIS::KEY_AID_TYPE, AIS::KEY_MMSI};
+	static const int keys_vessel[] = {AIS::KEY_MMSI, AIS::KEY_IMO, AIS::KEY_SHIPNAME, AIS::KEY_CALLSIGN, AIS::KEY_TO_BOW, AIS::KEY_TO_STERN, AIS::KEY_TO_STARBOARD, AIS::KEY_TO_PORT, AIS::KEY_DRAUGHT, AIS::KEY_SHIPTYPE, AIS::KEY_DESTINATION, AIS::KEY_ETA, AIS::KEY_LAT, AIS::KEY_LON, AIS::KEY_STATUS, AIS::KEY_TURN, AIS::KEY_PPM, AIS::KEY_SIGNAL_POWER, AIS::KEY_HEADING, AIS::KEY_ALT, AIS::KEY_AID_TYPE, AIS::KEY_COURSE, AIS::KEY_SPEED};
+
+	void PostgreSQL::appendValue(std::string &values, const JSON::Value &v)
 	{
-		if (!VP)
-			return "";
-
-		std::string keys = "";
-		std::string values = "";
-
-		for (const auto &p : data[0].getProperties())
-		{
-			if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
-				continue;
-
-			switch (p.Key())
-			{
-			case AIS::KEY_LAT:
-			case AIS::KEY_LON:
-			case AIS::KEY_MMSI:
-			case AIS::KEY_STATUS:
-			case AIS::KEY_TURN:
-			case AIS::KEY_HEADING:
-			case AIS::KEY_COURSE:
-			case AIS::KEY_SPEED:
-				keys += std::string(AIS::KeyMap[p.Key()][JSON_DICT_FULL]) + ",";
-				p.Get().to_string(values);
-				values += ",";
-				break;
-			}
-		}
-		keys += "msg_id,station_id,received_at";
-		values += m + ',' + s;
-		values += ",\'" + Util::Convert::toTimestampStr(msg->getRxTimeUnix()) + '\'';
-
-		return "\tINSERT INTO ais_vessel_pos (" + keys + ") VALUES (" + values + ");\n";
+		if (v.isString())
+			values += "\'" + escape(v.getString()) + "\'";
+		else
+			v.to_string(values);
 	}
 
-	std::string PostgreSQL::addVessel(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s)
+	std::string PostgreSQL::buildInsert(const char *table, const JSON::JSON &data, const int *keys, int nkeys,
+										const AIS::Message &msg, const std::string &m, const std::string &s)
+	{
+		std::string cols, values;
+
+		for (const auto &p : data.getMembers())
+		{
+			int k = p.Key();
+			if (k < 0 || k >= AIS::KEY_COUNT)
+				continue;
+
+			for (int i = 0; i < nkeys; i++)
+			{
+				if (k == keys[i])
+				{
+					cols += AIS::KeyMap[k][JSON_DICT_FULL];
+					cols += ',';
+					appendValue(values, p.Get());
+					values += ',';
+					break;
+				}
+			}
+		}
+
+		cols += "msg_id,station_id,received_at";
+		values += m + ',' + s + ",\'" + Util::Convert::toTimestampStr(msg.getRxTimeUnix()) + '\'';
+
+		return "\tINSERT INTO " + std::string(table) + " (" + cols + ") VALUES (" + values + ");\n";
+	}
+
+	std::string PostgreSQL::addVessel(const JSON::JSON &data, const AIS::Message &msg, const std::string &m, const std::string &s)
 	{
 		if (!VD)
 			return "";
 
-		std::string keys = "";
-		std::string set = "ON CONFLICT (mmsi) DO UPDATE SET ";
-		std::string values = "";
+		std::string cols, values, set = "ON CONFLICT (mmsi) DO UPDATE SET ";
 
-		for (const auto &p : data[0].getProperties())
+		for (const auto &p : data.getMembers())
 		{
-			if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
+			int k = p.Key();
+			if (k < 0 || k >= AIS::KEY_COUNT)
 				continue;
 
-			switch (p.Key())
+			for (int i = 0; i < (int)(sizeof(keys_vessel) / sizeof(keys_vessel[0])); i++)
 			{
-			case AIS::KEY_MMSI:
-			case AIS::KEY_IMO:
-			case AIS::KEY_SHIPNAME:
-			case AIS::KEY_CALLSIGN:
-			case AIS::KEY_TO_BOW:
-			case AIS::KEY_TO_STERN:
-			case AIS::KEY_TO_STARBOARD:
-			case AIS::KEY_TO_PORT:
-			case AIS::KEY_DRAUGHT:
-			case AIS::KEY_SHIPTYPE:
-			case AIS::KEY_DESTINATION:
-			case AIS::KEY_ETA:
-			case AIS::KEY_LAT:
-			case AIS::KEY_LON:
-			case AIS::KEY_STATUS:
-			case AIS::KEY_TURN:
-			case AIS::KEY_PPM:
-			case AIS::KEY_SIGNAL_POWER:
-			case AIS::KEY_HEADING:
-			case AIS::KEY_ALT:
-			case AIS::KEY_AID_TYPE:
-			case AIS::KEY_COURSE:
-			case AIS::KEY_SPEED:
-				keys += std::string(AIS::KeyMap[p.Key()][JSON_DICT_FULL]) + ",";
-				set += std::string(AIS::KeyMap[p.Key()][JSON_DICT_FULL]) + "=EXCLUDED." + AIS::KeyMap[p.Key()][JSON_DICT_FULL] + ",";
-
-				if (p.Get().isString())
+				if (k == keys_vessel[i])
 				{
-					values += "\'" + escape(p.Get().getString()) + "\'";
+					const char *name = AIS::KeyMap[k][JSON_DICT_FULL];
+					cols += name;
+					cols += ',';
+					set += name;
+					set += "=EXCLUDED.";
+					set += name;
+					set += ',';
+					appendValue(values, p.Get());
+					values += ',';
+					break;
 				}
-				else
-					p.Get().to_string(values);
-				values += ",";
-				break;
 			}
 		}
-		int type = 1 << msg->type();
-		int ch = msg->getChannel() - 'A';
+
+		int type = 1 << msg.type();
+		int ch = msg.getChannel() - 'A';
 		if (ch < 0 || ch > 4)
 			ch = 4;
 		ch = 1 << ch;
 
-		keys += "msg_id,station_id,received_at,count,msg_types,channels";
+		cols += "msg_id,station_id,received_at,count,msg_types,channels";
 		set += "msg_id=EXCLUDED.msg_id,station_id=EXCLUDED.station_id,received_at=EXCLUDED.received_at,count=ais_vessel.count+1,msg_types=" + std::to_string(type) + "|ais_vessel.msg_types,channels=" + std::to_string(ch) + "|ais_vessel.channels";
-		values += m + ',' + s;
-		values += ",\'" + Util::Convert::toTimestampStr(msg->getRxTimeUnix()) + '\'' + ",1," + std::to_string(type) + "," + std::to_string(ch);
+		values += m + ',' + s + ",\'" + Util::Convert::toTimestampStr(msg.getRxTimeUnix()) + "\'," + "1," + std::to_string(type) + "," + std::to_string(ch);
 
-		return "\tINSERT INTO ais_vessel (" + keys + ") VALUES (" + values + ")" + set + "; \n";
-	}
-
-	std::string PostgreSQL::addVesselStatic(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s)
-	{
-		if (!VS)
-			return "";
-
-		std::string keys = "";
-		std::string values = "";
-
-		for (const auto &p : data[0].getProperties())
-		{
-			if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
-				continue;
-			switch (p.Key())
-			{
-			case AIS::KEY_MMSI:
-			case AIS::KEY_IMO:
-			case AIS::KEY_SHIPNAME:
-			case AIS::KEY_CALLSIGN:
-			case AIS::KEY_TO_BOW:
-			case AIS::KEY_TO_STERN:
-			case AIS::KEY_TO_STARBOARD:
-			case AIS::KEY_TO_PORT:
-			case AIS::KEY_DRAUGHT:
-			case AIS::KEY_SHIPTYPE:
-			case AIS::KEY_DESTINATION:
-			case AIS::KEY_ETA:
-				keys += std::string(AIS::KeyMap[p.Key()][JSON_DICT_FULL]) + ",";
-				if (p.Get().isString())
-				{
-					values += "\'" + escape(p.Get().getString()) + "\'";
-				}
-				else
-					p.Get().to_string(values);
-				values += ",";
-				break;
-			}
-		}
-		keys += "msg_id,station_id,received_at";
-		values += m + ',' + s;
-		values += ",\'" + Util::Convert::toTimestampStr(msg->getRxTimeUnix()) + '\'';
-
-		return "\tINSERT INTO ais_vessel_static (" + keys + ") VALUES (" + values + ");\n";
-	}
-
-	std::string PostgreSQL::addBasestation(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s)
-	{
-		if (!BS)
-			return "";
-
-		std::string keys = "";
-		std::string values = "";
-
-		for (const auto &p : data[0].getProperties())
-		{
-			if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
-				continue;
-			switch (p.Key())
-			{
-			case AIS::KEY_LAT:
-			case AIS::KEY_LON:
-			case AIS::KEY_MMSI:
-				keys += std::string(AIS::KeyMap[p.Key()][JSON_DICT_FULL]) + ",";
-				p.Get().to_string(values);
-				values += ",";
-				break;
-			}
-		}
-		keys += "msg_id,station_id,received_at";
-		values += m + ',' + s;
-		values += ",\'" + Util::Convert::toTimestampStr(msg->getRxTimeUnix()) + '\'';
-
-		return "\tINSERT INTO ais_basestation (" + keys + ") VALUES (" + values + ");\n";
-	}
-
-	std::string PostgreSQL::addSARposition(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s)
-	{
-		if (!SAR)
-			return "";
-
-		std::string keys = "";
-		std::string values = "";
-
-		for (const auto &p : data[0].getProperties())
-		{
-			if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
-				continue;
-			switch (p.Key())
-			{
-			case AIS::KEY_LAT:
-			case AIS::KEY_LON:
-			case AIS::KEY_ALT:
-			case AIS::KEY_COURSE:
-			case AIS::KEY_MMSI:
-			case AIS::KEY_SPEED:
-				keys += std::string(AIS::KeyMap[p.Key()][JSON_DICT_FULL]) + ",";
-				p.Get().to_string(values);
-				values += ",";
-				break;
-			}
-		}
-		keys += "msg_id,station_id,received_at";
-		values += m + ',' + s;
-		values += ",\'" + Util::Convert::toTimestampStr(msg->getRxTimeUnix()) + '\'';
-
-		return "\tINSERT INTO ais_sar_position (" + keys + ") VALUES (" + values + ");\n";
-	}
-
-	std::string PostgreSQL::addATON(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s)
-	{
-		if (!ATON)
-			return "";
-
-		std::string keys = "";
-		std::string values = "";
-
-		for (const auto &p : data[0].getProperties())
-		{
-			if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
-				continue;
-			switch (p.Key())
-			{
-			case AIS::KEY_LAT:
-			case AIS::KEY_LON:
-			case AIS::KEY_NAME:
-			case AIS::KEY_TO_BOW:
-			case AIS::KEY_TO_STERN:
-			case AIS::KEY_TO_STARBOARD:
-			case AIS::KEY_TO_PORT:
-			case AIS::KEY_AID_TYPE:
-			case AIS::KEY_MMSI:
-				keys += std::string(AIS::KeyMap[p.Key()][JSON_DICT_FULL]) + ",";
-				if (p.Get().isString())
-				{
-					values += "\'" + escape(p.Get().getString()) + "\'";
-				}
-				else
-					p.Get().to_string(values);
-				values += ",";
-				break;
-			}
-		}
-		keys += "msg_id,station_id,received_at";
-		values += m + ',' + s;
-		values += ",\'" + Util::Convert::toTimestampStr(msg->getRxTimeUnix()) + '\'';
-
-		return "\tINSERT INTO ais_aton (" + keys + ") VALUES (" + values + ");\n";
+		return "\tINSERT INTO ais_vessel (" + cols + ") VALUES (" + values + ")" + set + "; \n";
 	}
 
 	void PostgreSQL::Receive(const JSON::JSON *data, int len, TAG &tag)
 	{
-
 		const std::lock_guard<std::mutex> lock(queue_mutex);
 
 		if (sql.tellp() > 32768 * 24)
@@ -439,88 +279,66 @@ namespace IO
 			Warning() << "DBMS: writing to database slow or failed, data lost.";
 			sql.str("");
 		}
-		const AIS::Message *msg = (AIS::Message *)data[0].binary;
 
-		if (!filter.include(*msg))
+		const JSON::JSON &json = data[0];
+		const AIS::Message &msg = *(AIS::Message *)json.binary;
+
+		if (!filter.include(msg))
 			return;
 
 		std::string m_id = MSGS ? "m_id" : " NULL";
-		std::string s_id = std::to_string(station_id ? station_id : msg->getStation());
+		std::string s_id = std::to_string(station_id ? station_id : msg.getStation());
 
 		if (MSGS)
 		{
 			sql << "\tINSERT INTO ais_message (mmsi, station_id, type, received_at,channel, signal_level, ppm) "
-				<< "VALUES (" << msg->mmsi() << ',' + s_id << ',' << msg->type() << ",\'" << Util::Convert::toTimestampStr(msg->getRxTimeUnix()) << "\',\'"
-				<< (char)msg->getChannel() << "\'," << tag.level << ',' << tag.ppm
+				<< "VALUES (" << msg.mmsi() << ',' << s_id << ',' << msg.type() << ",\'" << Util::Convert::toTimestampStr(msg.getRxTimeUnix()) << "\',\'"
+				<< (char)msg.getChannel() << "\'," << tag.level << ',' << tag.ppm
 				<< ") RETURNING id INTO m_id;\n";
 		}
 
 		if (NMEA)
 		{
-			for (auto s : msg->NMEA)
-			{
-
-				sql << "\tINSERT INTO ais_nmea (msg_id,station_id,mmsi,received_at,nmea) VALUES (" << m_id << ',' << s_id << ',' << msg->mmsi() << ",\'" << Util::Convert::toTimestampStr(msg->getRxTimeUnix()) << "\',\'" << s << "\');\n";
-			}
+			for (const auto &s : msg.NMEA)
+				sql << "\tINSERT INTO ais_nmea (msg_id,station_id,mmsi,received_at,nmea) VALUES (" << m_id << ',' << s_id << ',' << msg.mmsi() << ",\'" << Util::Convert::toTimestampStr(msg.getRxTimeUnix()) << "\',\'" << s << "\');\n";
 		}
 
-		switch (msg->type())
+		switch (msg.type())
 		{
-		case 1:
-		case 2:
-		case 3:
-		case 27:
-			sql << addVesselPosition(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
+		case 1: case 2: case 3: case 18: case 27:
+			if (VP) sql << buildInsert("ais_vessel_pos", json, keys_vessel_pos, sizeof(keys_vessel_pos) / sizeof(int), msg, m_id, s_id);
 			break;
 		case 4:
-			sql << addBasestation(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
+			if (BS) sql << buildInsert("ais_basestation", json, keys_basestation, sizeof(keys_basestation) / sizeof(int), msg, m_id, s_id);
 			break;
-		case 5:
-			sql << addVesselStatic(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
+		case 5: case 24:
+			if (VS) sql << buildInsert("ais_vessel_static", json, keys_vessel_static, sizeof(keys_vessel_static) / sizeof(int), msg, m_id, s_id);
 			break;
 		case 9:
-			sql << addSARposition(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
-			break;
-		case 18:
-			sql << addVesselPosition(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
+			if (SAR) sql << buildInsert("ais_sar_position", json, keys_sar, sizeof(keys_sar) / sizeof(int), msg, m_id, s_id);
 			break;
 		case 19:
-			sql << addVesselPosition(data, msg, m_id, s_id);
-			sql << addVesselStatic(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
+			if (VP) sql << buildInsert("ais_vessel_pos", json, keys_vessel_pos, sizeof(keys_vessel_pos) / sizeof(int), msg, m_id, s_id);
+			if (VS) sql << buildInsert("ais_vessel_static", json, keys_vessel_static, sizeof(keys_vessel_static) / sizeof(int), msg, m_id, s_id);
 			break;
 		case 21:
-			sql << addATON(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
-			break;
-		case 24:
-			sql << addVesselStatic(data, msg, m_id, s_id);
-			sql << addVessel(data, msg, m_id, s_id);
+			if (ATON) sql << buildInsert("ais_aton", json, keys_aton, sizeof(keys_aton) / sizeof(int), msg, m_id, s_id);
 			break;
 		default:
 			break;
 		}
-		// TO DO: types, etc
-		for (const auto &p : data[0].getProperties())
+
+		sql << addVessel(json, msg, m_id, s_id);
+
+		for (const auto &p : json.getMembers())
 		{
-			if (p.Key() >= 0 && p.Key() < db_keys.size() && db_keys[p.Key()] != -1)
+			if (p.Key() >= 0 && p.Key() < (int)db_keys.size() && db_keys[p.Key()] != -1)
 			{
-				if (p.Get().isString())
-				{
-					sql << "INSERT INTO ais_property (msg_id, key, value) VALUES (" << m_id << "\'" << db_keys[p.Key()] << "\',\'" << escape(p.Get().getString()) << "\');\n";
-				}
-				else
-				{
-					std::string temp;
-					p.Get().to_string(temp);
-					temp = temp.substr(0, 20);
-					sql << "INSERT INTO ais_property (msg_id, key, value) VALUES  (" << m_id << "\',\'" + temp + "\');\n";
-				}
+				std::string temp;
+				appendValue(temp, p.Get());
+				if (temp.size() > 20)
+					temp.resize(20);
+				sql << "\tINSERT INTO ais_property (msg_id, key, value) VALUES (" << m_id << ",\'" << db_keys[p.Key()] << "\',\'" << temp << "\');\n";
 			}
 		}
 		sql << "\n";

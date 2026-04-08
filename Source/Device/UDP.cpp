@@ -52,12 +52,13 @@ namespace Device
 		int r = getaddrinfo(server.c_str(), port.c_str(), &hints, &address);
 		if (r != 0 || address == NULL)
 		{
-			throw std::runtime_error("UDP: cannot create socket.");
+			throw std::runtime_error("UDP: cannot resolve address.");
 		}
 
 		sock = socket(address->ai_family, SOCK_DGRAM, 0);
 		if (sock == -1)
 		{
+			StopServer();
 			throw std::runtime_error("UDP: cannot create socket.");
 		}
 
@@ -65,14 +66,14 @@ namespace Device
 		int optval = 1;
 		if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) != 0)
 		{
+			StopServer();
 			throw std::runtime_error("UDP: cannot set socket option.");
 		}
 
-		r = fcntl(sock, F_GETFL, 0);
-		r = fcntl(sock, F_SETFL, r | O_NONBLOCK);
-
-		if (r == -1)
+		int flags = fcntl(sock, F_GETFL, 0);
+		if (flags == -1 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1)
 		{
+			StopServer();
 			throw std::runtime_error("UDP: cannot make the socket non-blocking.");
 		}
 #else
@@ -83,6 +84,7 @@ namespace Device
 		if (bind(sock, address->ai_addr, address->ai_addrlen) != 0)
 		{
 			Debug() << "UDP: binding to " << server << " port " << port << ": " << strerror(errno);
+			StopServer();
 			throw std::runtime_error("UDP: cannot bind to port.");
 		}
 		SleepSystem(100);
@@ -91,6 +93,7 @@ namespace Device
 	void UDP::Close()
 	{
 		Device::Close();
+		StopServer();
 	}
 
 	void UDP::Play()

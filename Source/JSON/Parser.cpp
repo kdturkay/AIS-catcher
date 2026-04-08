@@ -74,7 +74,10 @@ namespace JSON
 			return __builtin_ctz((unsigned int)mask) >> 3;
 #elif defined(_MSC_VER)
 		unsigned long idx;
-		_BitScanForward64(&idx, (unsigned long long)mask);
+		if (sizeof(size_t) == 8)
+			_BitScanForward64(&idx, (unsigned long long)mask);
+		else
+			_BitScanForward(&idx, (unsigned long)mask);
 		return (int)(idx >> 3);
 #else
 		int n = 0;

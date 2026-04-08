@@ -27,7 +27,7 @@ namespace JSON
 {
 
 	class JSON;
-	class Property;
+	class Member;
 
 	// JSON value item, 8 bytes (32 bits), 16 bytes (64 bits)
 	class Value
@@ -125,49 +125,49 @@ namespace JSON
 		}
 	};
 
-	class Property
+	class Member
 	{
 
 		int key;
 		Value value;
 
 	public:
-		Property(int p, Value v)
+		Member(int p, Value v)
 		{
 			key = p;
 			value = v;
 		}
-		Property(int p, long int v)
+		Member(int p, long int v)
 		{
 			key = p;
 			value.setInt(v);
 		}
-		Property(int p, double v)
+		Member(int p, double v)
 		{
 			key = p;
 			value.setFloat(v);
 		}
-		Property(int p, bool v)
+		Member(int p, bool v)
 		{
 			key = p;
 			value.setBool(v);
 		}
-		Property(int p, std::string *v)
+		Member(int p, std::string *v)
 		{
 			key = p;
 			value.setString(v);
 		}
-		Property(int p, std::vector<std::string> *v)
+		Member(int p, std::vector<std::string> *v)
 		{
 			key = p;
 			value.setStringArray(v);
 		}
-		Property(int p, JSON *v)
+		Member(int p, JSON *v)
 		{
 			key = p;
 			value.setObject(v);
 		}
-		Property(int p)
+		Member(int p)
 		{
 			key = p;
 			value.setNull();
@@ -185,21 +185,21 @@ namespace JSON
 		friend class Pool;
 
 	private:
-		std::vector<Property> properties;
+		std::vector<Member> members;
 
 	public:
 		void *binary = NULL;
 
 		void clear()
 		{
-			properties.clear();
+			members.clear();
 		}
 
-		const std::vector<Property> &getProperties() const { return properties; }
+		const std::vector<Member> &getMembers() const { return members; }
 
 		const Value *getValue(int p) const
 		{
-			for (auto &o : properties)
+			for (auto &o : members)
 				if (o.Key() == p)
 					return &o.Get();
 
@@ -210,45 +210,45 @@ namespace JSON
 
 		void Add(int p, int v)
 		{
-			properties.push_back(Property(p, (long int)v));
+			members.push_back(Member(p, (long int)v));
 		}
 
 		void Add(int p, double v)
 		{
-			properties.push_back(Property(p, (double)v));
+			members.push_back(Member(p, (double)v));
 		}
 
 		void Add(int p, bool v)
 		{
-			properties.push_back(Property(p, (bool)v));
+			members.push_back(Member(p, (bool)v));
 		}
 
 		void Add(int p, JSON *v)
 		{
-			properties.push_back(Property(p, v));
+			members.push_back(Member(p, v));
 		}
 
 		void Add(int p, const std::string &v, Pool &pool);
 
 		void Add(int p)
 		{
-			properties.push_back(Property(p));
+			members.push_back(Member(p));
 		}
 
 		void Add(int p, Value v)
 		{
-			properties.push_back(Property(p, (Value)v));
+			members.push_back(Member(p, (Value)v));
 		}
 
 		// for items where memory is managed outside the object
 		void Add(int p, const std::string *v)
 		{
-			properties.push_back(Property(p, (std::string *)v));
+			members.push_back(Member(p, (std::string *)v));
 		}
 
 		void Add(int p, const std::vector<std::string> *v)
 		{
-			properties.push_back(Property(p, (std::vector<std::string> *)v));
+			members.push_back(Member(p, (std::vector<std::string> *)v));
 		}
 	};
 
@@ -310,7 +310,7 @@ namespace JSON
 
 	inline void JSON::Add(int p, const std::string &v, Pool &pool)
 	{
-		properties.push_back(Property(p, pool.addString(v)));
+		members.push_back(Member(p, pool.addString(v)));
 	}
 
 	// Document: owns a root JSON and its pool
@@ -325,6 +325,6 @@ namespace JSON
 			root.clear();
 		}
 
-		const std::vector<Property> &getProperties() const { return root.getProperties(); }
+		const std::vector<Member> &getMembers() const { return root.getMembers(); }
 	};
 }

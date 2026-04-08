@@ -83,12 +83,10 @@ namespace IO
 #ifdef HASPSQL
 		void process();
 
-		std::string addVesselPosition(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addVesselStatic(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addVessel(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addBasestation(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addSARposition(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addATON(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
+		void appendValue(std::string &values, const JSON::Value &v);
+		std::string buildInsert(const char *table, const JSON::JSON &data, const int *keys, int nkeys,
+								const AIS::Message &msg, const std::string &m, const std::string &s);
+		std::string addVessel(const JSON::JSON &data, const AIS::Message &msg, const std::string &m, const std::string &s);
 
 		void Receive(const JSON::JSON *data, int len, TAG &tag);
 #endif

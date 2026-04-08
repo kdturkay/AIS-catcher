@@ -42,7 +42,7 @@ struct LogMessage
     std::string message;
     std::string time;
 
-    LogMessage() : level(LogLevel::__EMPTY), message(std::move("")), time(std::move("")) {}
+    LogMessage() : level(LogLevel::__EMPTY) {}
     LogMessage(LogLevel l, std::string msg, std::string time) : level(l), message(std::move(msg)), time(std::move(time)) {}
 
     std::string levelToString() const;
@@ -56,6 +56,8 @@ public:
     static Logger &getInstance();
 
     ~Logger() = default;
+    Logger(const Logger &) = delete;
+    Logger &operator=(const Logger &) = delete;
 
     typedef std::function<void(const LogMessage &)> LogCallback;
     void log(LogLevel level, const std::string &message);
@@ -67,7 +69,9 @@ public:
     void setMaxBufferSize(int size)
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        message_buffer_.clear();
         message_buffer_.resize(size);
+        buffer_position_ = 0;
     }
 
     void setLogToSystem(std::string ident = "aiscatcher");
@@ -90,8 +94,6 @@ private:
 
     std::mutex mutex_;
     LogLevel min_level_ = LogLevel::__INFO;
-
-    static std::unique_ptr<Logger> instance_;
 
     std::vector<LogMessage> message_buffer_;
     int buffer_position_ = 0;
@@ -118,14 +120,14 @@ public:
     template <typename T>
     LogStream &operator<<(const T &msg)
     {
-        (*stream_) << msg;
+        if (stream_) (*stream_) << msg;
         return *this;
     }
 
     typedef std::ostream &(*Manipulator)(std::ostream &);
     LogStream &operator<<(Manipulator manip)
     {
-        manip(*stream_);
+        if (stream_) manip(*stream_);
         return *this;
     }
 
