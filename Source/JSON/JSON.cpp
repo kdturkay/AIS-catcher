@@ -31,10 +31,7 @@ namespace JSON
 			str += *data.s;
 			break;
 		case Value::Type::BOOL:
-			if (data.b)
-				str.append("true", 4);
-			else
-				str.append("false", 5);
+			str += data.b ? "true" : "false";
 			break;
 		case Value::Type::INT:
 			str += std::to_string(data.i);
@@ -43,17 +40,17 @@ namespace JSON
 			str += std::to_string(data.f);
 			break;
 		case Value::Type::EMPTY:
-			str.append("null", 4);
+			str += "null";
 			break;
 		case Value::Type::OBJECT:
-			str.append("object", 6);
+			str += "object";
 			break;
 		case Value::Type::ARRAY_STRING:
 		case Value::Type::ARRAY:
-			str.append("array", 5);
+			str += "array";
 			break;
 		default:
-			str.append("error", 5);
+			str += "error";
 			break;
 		}
 	}

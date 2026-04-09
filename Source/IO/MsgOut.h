@@ -56,9 +56,14 @@ namespace IO
 		virtual void Stop() {}
 		void Connect(Receiver &r);
 
-		std::string getJSON() const
+		void writeJSON(JSON::Writer &w) const
 		{
-			return "{\"type\":\"" + type + "\"" + ",\"description\":\"" + description + "\"" + ",\"stats\":" + stats.toJSON() + "}";
+			w.beginObject()
+				.kv("type", type)
+				.kv("description", description)
+				.key("stats");
+			stats.writeJSON(w);
+			w.endObject();
 		}
 
 		std::string getSourcesStr()

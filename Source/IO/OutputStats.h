@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include "JSON/StringBuilder.h"
+
 namespace IO
 {
     struct OutputStats
@@ -29,9 +31,13 @@ namespace IO
         uint32_t reconnects = 0;
         uint32_t connected = 0;
 
-        std::string toJSON() const
+        void writeJSON(JSON::Writer &w) const
         {
-            return "{\"bytes_out\":" + std::to_string(bytes_out) + ",\"bytes_in\":" + std::to_string(bytes_in) + ",\"connect_ok\":" + std::to_string(connect_ok) + ",\"connect_fail\":" + std::to_string(connect_fail) + ",\"reconnects\":" + std::to_string(reconnects) + ",\"connected\":" + std::to_string(connected) + "}";
+            w.beginObject()
+                .kv("bytes_out", bytes_out).kv("bytes_in", bytes_in)
+                .kv("connect_ok", connect_ok).kv("connect_fail", connect_fail)
+                .kv("reconnects", reconnects).kv("connected", connected)
+                .endObject();
         }
     };
 }

@@ -63,7 +63,6 @@ namespace IO
 		bool terminate = false, running = false;
 
 		ZIP zip;
-		std::ostringstream oss;
 
 		std::string url, url_json, userpwd;
 		bool gzip = false, show_response = true;
@@ -145,7 +144,6 @@ namespace IO
 		}
 
 		Setting &SetKey(AIS::Keys key, const std::string &arg) override;
-
 
 		void Receive(const AIS::Message *data, int len, TAG &tag) override;
 		void Receive(const JSON::JSON *data, int len, TAG &tag) override;

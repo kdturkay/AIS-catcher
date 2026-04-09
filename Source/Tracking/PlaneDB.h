@@ -463,32 +463,21 @@ public:
 
                 if (time_since_update <= 60 || (time_since_update <= 300 && plane.airborne == 0))
                 {
-                    w.beginArray()
-                        .val(plane.hexident)
-                        .val_unless(plane.lat, LAT_UNDEFINED)
-                        .val_unless(plane.lon, LON_UNDEFINED)
-                        .val_unless(plane.altitude, ALTITUDE_UNDEFINED)
-                        .val_unless(plane.speed, SPEED_UNDEFINED)
-                        .val_unless(plane.heading, HEADING_UNDEFINED)
-                        .val_unless(plane.vertrate, VERT_RATE_UNDEFINED)
+                    w.beginArray().val(plane.hexident)
+                        .val_unless(plane.lat, LAT_UNDEFINED).val_unless(plane.lon, LON_UNDEFINED)
+                        .val_unless(plane.altitude, ALTITUDE_UNDEFINED).val_unless(plane.speed, SPEED_UNDEFINED)
+                        .val_unless(plane.heading, HEADING_UNDEFINED).val_unless(plane.vertrate, VERT_RATE_UNDEFINED)
                         .val_unless(plane.squawk, SQUAWK_UNDEFINED)
-                        .val(plane.callsign)
-                        .val(plane.airborne)
-                        .val(plane.nMessages)
-                        .val((long long)time_since_update)
-                        .val_unless(plane.category, CATEGORY_UNDEFINED)
-                        .val_unless(plane.signalLevel, LEVEL_UNDEFINED);
+                        .val(plane.callsign).val(plane.airborne).val(plane.nMessages).val((long long)time_since_update)
+                        .val_unless(plane.category, CATEGORY_UNDEFINED).val_unless(plane.signalLevel, LEVEL_UNDEFINED);
                     if (plane.country_code[0] != ' ')
                         w.val(plane.country_code, 2);
                     else
                         w.val_null();
                     w.val_unless(plane.distance, DISTANCE_UNDEFINED)
-                        .val(plane.message_types)
-                        .val(plane.message_subtypes)
-                        .val(plane.group_mask)
-                        .val(plane.last_group)
-                        .val_unless(plane.angle, ANGLE_UNDEFINED)
-                        .endArray();
+                        .val(plane.message_types).val(plane.message_subtypes)
+                        .val(plane.group_mask).val(plane.last_group)
+                        .val_unless(plane.angle, ANGLE_UNDEFINED).endArray();
                 }
             }
             ptr = items[ptr].time_ll.next;

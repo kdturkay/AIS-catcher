@@ -43,9 +43,11 @@ namespace JSON
 			char d = (c == '\t' || c == '\r' || c == '\n') ? ' ' : c;
 			ss << d;
 		}
+
 		ss << std::endl
 		   << std::string(MIN(char_limit, pos - from), ' ') << "^" << std::endl
 		   << std::string(MIN(char_limit, pos - from), ' ') << "^" << std::endl;
+
 		throw std::runtime_error("syntax error in JSON: " + err);
 	}
 
@@ -254,10 +256,14 @@ namespace JSON
 							{
 								char h = p[i];
 								int d;
-								if (h >= '0' && h <= '9') d = h - '0';
-								else if (h >= 'a' && h <= 'f') d = h - 'a' + 10;
-								else if (h >= 'A' && h <= 'F') d = h - 'A' + 10;
-								else error("illegal unicode escape sequence", (int)(p - p_start));
+								if (h >= '0' && h <= '9')
+									d = h - '0';
+								else if (h >= 'a' && h <= 'f')
+									d = h - 'a' + 10;
+								else if (h >= 'A' && h <= 'F')
+									d = h - 'A' + 10;
+								else
+									error("illegal unicode escape sequence", (int)(p - p_start));
 								cp = (cp << 4) | d;
 							}
 							ch = (char)cp;
@@ -285,8 +291,16 @@ namespace JSON
 		}
 
 		case '-':
-		case '0': case '1': case '2': case '3': case '4':
-		case '5': case '6': case '7': case '8': case '9':
+		case '0':
+		case '1':
+		case '2':
+		case '3':
+		case '4':
+		case '5':
+		case '6':
+		case '7':
+		case '8':
+		case '9':
 		{
 			bool floating = false;
 			bool scientific = false;
@@ -436,7 +450,8 @@ namespace JSON
 			double val = 0.0;
 			const char *s = tokenStart;
 			bool neg = (*s == '-');
-			if (neg) s++;
+			if (neg)
+				s++;
 
 			int64_t int_part = 0;
 			while (s < tokenEnd && *s >= '0' && *s <= '9')
@@ -531,7 +546,7 @@ namespace JSON
 			v.setArray(arr);
 		}
 
-			break;
+		break;
 		case TokenType::End:
 			error_parser("unexpected end of file");
 

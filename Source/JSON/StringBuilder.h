@@ -45,9 +45,6 @@ namespace JSON
 	}
 
 	// Direct-to-string unsigned formatter (no std::to_string temporary).
-	// Only kept because DB::getPathGeoJSON's not-found fallback still
-	// stitches a literal by hand. All other numeric formatting goes
-	// through Writer's member methods.
 	void append_uint(std::string &out, unsigned long long v);
 
 	// Fast writer that owns raw ptr/end cursors into a std::string sink and
@@ -154,6 +151,10 @@ namespace JSON
 
 			put_uint_raw((unsigned long long)whole);
 
+			// Integer value → no decimal point, no fractional digits.
+			if (frac == 0)
+				return;
+
 			*ptr++ = '.';
 			ptr[5] = (char)('0' + frac % 10);
 			frac /= 10;
@@ -167,6 +168,10 @@ namespace JSON
 			frac /= 10;
 			ptr[0] = (char)('0' + frac);
 			ptr += 6;
+			// Trim trailing zeros. Safe: the frac == 0 early-return
+			// guarantees at least one non-zero digit remains.
+			while (ptr[-1] == '0')
+				ptr--;
 		}
 
 		// Writes ',' if a separator is pending. Caller must have reserved >= 1.

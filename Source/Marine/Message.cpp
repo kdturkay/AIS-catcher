@@ -169,13 +169,15 @@ namespace AIS
 		w.append_lit(",\"nmea\":[");
 		for (int i = 0; i < (int)NMEA.size(); i++)
 		{
-			if (i > 0) w.append(',');
+			if (i > 0)
+				w.append(',');
 			w.append('"');
 			w.append(NMEA[i].data(), NMEA[i].size());
 			w.append('"');
 		}
 		w.append_lit("]}");
-		if (suffix) w.append_lit(suffix);
+		if (suffix)
+			w.append_lit(suffix);
 
 		return w.finish();
 	}
@@ -201,9 +203,18 @@ namespace AIS
 			char tmp[12];
 			int n = 0;
 			int v = station;
-			if (v < 0) { *sp++ = '-'; v = -v; }
-			do { tmp[n++] = '0' + v % 10; v /= 10; } while (v);
-			for (int i = n - 1; i >= 0; i--) *sp++ = tmp[i];
+			if (v < 0)
+			{
+				*sp++ = '-';
+				v = -v;
+			}
+			do
+			{
+				tmp[n++] = '0' + v % 10;
+				v /= 10;
+			} while (v);
+			for (int i = n - 1; i >= 0; i--)
+				*sp++ = tmp[i];
 			srcLen = sp - src;
 		}
 
@@ -242,8 +253,10 @@ namespace AIS
 			w.append('\\');
 
 			w.append(nmea.data(), nmea.size());
-			if (suffix) w.append_lit(suffix);
-			else        w.append_lit("\r\n");
+			if (suffix)
+				w.append_lit(suffix);
+			else
+				w.append_lit("\r\n");
 
 			seq++;
 		}
@@ -260,10 +273,25 @@ namespace AIS
 
 		auto push_escaped = [&](unsigned char byte)
 		{
-			if (byte == '\n')      { w.append((char)0xad); w.append((char)0xae); }
-			else if (byte == '\r') { w.append((char)0xad); w.append((char)0xaf); }
-			else if (byte == 0xad) { w.append((char)0xad); w.append((char)0xad); }
-			else                   { w.append((char)byte); }
+			if (byte == '\n')
+			{
+				w.append((char)0xad);
+				w.append((char)0xae);
+			}
+			else if (byte == '\r')
+			{
+				w.append((char)0xad);
+				w.append((char)0xaf);
+			}
+			else if (byte == 0xad)
+			{
+				w.append((char)0xad);
+				w.append((char)0xad);
+			}
+			else
+			{
+				w.append((char)byte);
+			}
 		};
 
 		push_escaped(0xac);
@@ -305,8 +333,10 @@ namespace AIS
 			push_escaped(crc_value & 0xFF);
 		}
 
-		if (suffix) w.append_lit(suffix);
-		else        w.append('\n');
+		if (suffix)
+			w.append_lit(suffix);
+		else
+			w.append('\n');
 
 		return w.finish();
 	}
@@ -555,18 +585,17 @@ namespace AIS
 
 	static const uint8_t nmea_decode[256] = {
 		// indices 0-47: unused (control chars, space, punctuation before '0')
-		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		// indices 48-87: '0'-'W' → 0-39  (c - 48)
-		 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,
-		16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
-		32,33,34,35,36,37,38,39,
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+		16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+		32, 33, 34, 35, 36, 37, 38, 39,
 		// indices 88-95: 'X'-'_' → 40-47  (c - 48)
-		40,41,42,43,44,45,46,47,
+		40, 41, 42, 43, 44, 45, 46, 47,
 		// indices 96-119: '`'-'w' → 40-63  (c - 56)
-		40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,
-		56,57,58,59,60,61,62,63
-	};
+		40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+		56, 57, 58, 59, 60, 61, 62, 63};
 
 	void Message::appendPayload(const char *src, int count)
 	{

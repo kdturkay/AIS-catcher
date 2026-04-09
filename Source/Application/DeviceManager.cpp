@@ -179,26 +179,21 @@ void DeviceManager::printAvailableDevices(bool JSON)
 	}
 	else
 	{
-		std::cout << "{\"devices\":[";
-
+		std::string s;
+		JSON::Writer w(s);
+		w.beginObject().key("devices").beginArray();
 		for (int i = 0; i < device_list.size(); i++)
 		{
 			std::string type = Util::Parse::DeviceTypeString(device_list[i].getType());
 			std::string serial = device_list[i].getSerial();
-			std::string name = type + " [" + serial + "]";
-
-			// Properly escape JSON strings
-			std::string type_escaped = JSON::stringify(type, false);
-			std::string serial_escaped = JSON::stringify(serial, false);
-			std::string name_escaped = JSON::stringify(name, false);
-
-			std::cout << "{\"input\":\"" + type_escaped;
-			std::cout << "\",\"serial\":\"" + serial_escaped;
-			std::cout << "\",\"name\":\"" + name_escaped + "\"";
-
-			std::cout << "}" << (i == device_list.size() - 1 ? "" : ",");
+			w.beginObject()
+				.kv("input", type)
+				.kv("serial", serial)
+				.kv("name", type + " [" + serial + "]")
+				.endObject();
 		}
-		std::cout << "]}\n";
+		w.endArray().endObject().finish();
+		std::cout << s << "\n";
 	}
 }
 

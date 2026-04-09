@@ -157,13 +157,8 @@ public:
 		w.endObject();
 	}
 
-	std::string toJSON(bool empty = false) {
-		std::string s;
-		JSON::Writer w(s);
-		writeJSON(w, empty);
-		w.finish();
-		return s;
-	}
+#define W(x) file.write((const char*)&(x), sizeof(x))
+#define R(x) file.read((char*)&(x), sizeof(x))
 
 	bool Save(std::ofstream& file) {
 		std::lock_guard<std::mutex> l{ this->mtx };
@@ -171,49 +166,27 @@ public:
 		int magic = _MAGIC;
 		int version = _VERSION;
 
-		if (!file.write((const char*)&magic, sizeof(int))) return false;			 // Check magic number
-		if (!file.write((const char*)&version, sizeof(int))) return false;			 // Check version number
-		if (!file.write((const char*)&_count, sizeof(int))) return false;			 // Check count
-		if (!file.write((const char*)&_vessels, sizeof(int))) return false;			 // Check count
-		if (!file.write((const char*)&_msg, sizeof(_msg))) return false;			 // Check msg array
-		if (!file.write((const char*)&_channel, sizeof(_channel))) return false;	 // Check channel array
-		if (!file.write((const char*)&_level_min, sizeof(_level_min))) return false; // Check level
-		if (!file.write((const char*)&_level_max, sizeof(_level_max))) return false; // Check level
-		if (!file.write((const char*)&_ppm, sizeof(_ppm))) return false;			 // Check ppm
-		if (!file.write((const char*)&_distance, sizeof(_distance))) return false;	 // Check distance
-		if (!file.write((const char*)&_radarA, sizeof(_radarA))) return false;		 // Check radar array
-		if (!file.write((const char*)&_radarB, sizeof(_radarB))) return false;		 // Check radar array
-
-		return true;
+		return (bool)(W(magic) && W(version) && W(_count) && W(_vessels)
+			&& W(_msg) && W(_channel)
+			&& W(_level_min) && W(_level_max) && W(_ppm) && W(_distance)
+			&& W(_radarA) && W(_radarB));
 	}
 
 	bool Load(std::ifstream& file) {
 		std::lock_guard<std::mutex> l{ this->mtx };
 
 		int magic = 0, version = 0;
-		if (!file.read((char*)&magic, sizeof(int))) return false;	// Check count
-		if (!file.read((char*)&version, sizeof(int))) return false; // Check count
-		if (!file.read((char*)&_count, sizeof(int))) return false;	// Check count
-		if (version == _VERSION) {
-			if (!file.read((char*)&_vessels, sizeof(int))) return false; // Check count
-		}
-		if (!file.read((char*)&_msg, sizeof(_msg))) return false;			  // Check msg array
-		if (!file.read((char*)&_channel, sizeof(_channel))) return false;	  // Check channel array
-		if (!file.read((char*)&_level_min, sizeof(_level_min))) return false; // Check level
-		if (!file.read((char*)&_level_max, sizeof(_level_max))) return false; // Check level
-		if (!file.read((char*)&_ppm, sizeof(_ppm))) return false;			  // Check ppm
-		if (!file.read((char*)&_distance, sizeof(_distance))) return false;	  // Check distance
-		if (!file.read((char*)&_radarA, sizeof(_radarA))) return false;		  // Check radar array
-		if (!file.read((char*)&_radarB, sizeof(_radarB))) return false;		  // Check radar array
+		bool ok = R(magic) && R(version) && R(_count)
+			&& (version != _VERSION || R(_vessels))
+			&& R(_msg) && R(_channel)
+			&& R(_level_min) && R(_level_max) && R(_ppm) && R(_distance)
+			&& R(_radarA) && R(_radarB);
 
-		if (false && !file.eof()) {
-			Warning() << "Statistics: error with incorrect file size.";
-			return false;
-		}
-		if (magic != _MAGIC || (version != _VERSION && version != 1)) return false;
-
-		return true;
+		return ok && magic == _MAGIC && (version == _VERSION || version == 1);
 	}
+
+#undef W
+#undef R
 };
 
 class Counter : public StreamIn<JSON::JSON> {
@@ -229,7 +202,6 @@ public:
 	void Receive(const JSON::JSON* msg, int len, TAG& tag) { stat.Add(*((AIS::Message*)msg[0].binary), tag); }
 
 	void writeJSON(JSON::Writer &w, bool empty = false) { stat.writeJSON(w, empty); }
-	std::string toJSON(bool empty = false) { return stat.toJSON(empty); }
 };
 
 struct ByteCounter : public StreamIn<RAW> {

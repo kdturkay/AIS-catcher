@@ -120,56 +120,56 @@ namespace IO
 			send_list.splice(send_list.begin(), msg_list);
 		}
 
-		oss.str("");
+		json.clear();
 		int r;
 
 		if (protocol == PROTOCOL::AISCATCHER || protocol == PROTOCOL::AIRFRAMES)
 		{
 			const std::string now = Util::Convert::toTimeStr(std::time(0));
 
-			oss << "{\"protocol\":\"" << protocol_string << "\"," << "\"encodetime\":\"" << now << "\"," << "\"stationid\":" << stationid << "," << "\"station_lat\":" << lat << ","
-				<< "\"station_lon\":" << lon << "," << "\"receiver\":{\"description\":\"AIS-catcher " VERSION "\"," << "\"version\":" << VERSION_NUMBER << ",\"engine\":" << model
-				<< ",\"setting\":" << model_setting << "},\"device\":{\"product\":" << product << ",\"vendor\":" << vendor << ",\"serial\":" << serial << ",\"setting\":" << device_setting << "},\"msgs\":[";
-
-			char delim = ' ';
+			JSON::Writer w(json);
+			w.beginObject()
+				.kv("protocol", protocol_string).kv("encodetime", now)
+				.kv_raw("stationid", stationid).kv_raw("station_lat", lat).kv_raw("station_lon", lon)
+				.key("receiver").beginObject()
+					.kv("description", "AIS-catcher " VERSION).kv("version", VERSION_NUMBER)
+					.kv_raw("engine", model).kv_raw("setting", model_setting).endObject()
+				.key("device").beginObject()
+					.kv_raw("product", product).kv_raw("vendor", vendor)
+					.kv_raw("serial", serial).kv_raw("setting", device_setting).endObject()
+				.key("msgs").beginArray();
 			for (const auto &m : send_list)
-			{
-				oss << delim << "\n"
-					<< m;
-				delim = ',';
-			}
+				w.raw_val(m);
+			w.endArray().endObject().finish();
 
-			oss << "\n]}\n";
-
-			r = http.Post(oss.str(), gzip, false, "");
+			r = http.Post(json, gzip, false, "");
 		}
 		else if (PROTOCOL::APRS == protocol)
 		{
 			const std::string now = Util::Convert::toTimeStr(std::time(0));
 
-			oss << "{\"protocol\":\"jsonais\"," << "\"encodetime\":\"" << now << "\"," << "\"groups\":[{\"path\":[{\"name\":" << stationid << ",\"url\":" << url_json << "}],\"msgs\":[";
-
-			char delim = ' ';
-
+			JSON::Writer w(json);
+			w.beginObject().kv("protocol", "jsonais").kv("encodetime", now)
+				.key("groups").beginArray().beginObject()
+					.key("path").beginArray().beginObject()
+						.kv_raw("name", stationid).kv_raw("url", url_json)
+						.endObject().endArray()
+					.key("msgs").beginArray();
 			for (const auto &m : send_list)
-			{
-				oss << delim << "\n"
-					<< m;
-				delim = ',';
-			}
+				w.raw_val(m);
+			w.endArray().endObject().endArray().endObject().finish();
 
-			oss << "\n]}]}";
-
-			r = http.Post(oss.str(), gzip, true, "jsonais");
+			r = http.Post(json, gzip, true, "jsonais");
 		}
 		else
 		{
 			for (const auto &m : send_list)
 			{
-				oss << m << "\n";
+				json += m;
+				json += '\n';
 			}
 
-			r = http.Post(oss.str(), gzip, false, "");
+			r = http.Post(json, gzip, false, "");
 		}
 
 		if (r < 200 || r > 299)
@@ -972,6 +972,12 @@ namespace IO
 				{
 					((Protocol::MQTT *)session)->send((s + "\r\n").c_str(), s.length() + 2, topic_template.get(tag, data[0]));
 				}
+			}
+			else if (fmt == MessageFormat::NMEA_TAG)
+			{
+				json.clear();
+				data[i].getNMEATagBlock(json);
+				((Protocol::MQTT *)session)->send(json.data(), (int)json.size(), topic_template.get(tag, data[0]));
 			}
 			else if (fmt == MessageFormat::BINARY_NMEA)
 			{

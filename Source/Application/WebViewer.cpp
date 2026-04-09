@@ -935,7 +935,7 @@ std::string WebViewer::buildStatJSON(ReceiverTracker *s)
 	if (msg_channels)
 	{
 		for (auto &o : *msg_channels)
-			w.raw_val(o->getJSON());
+			o->writeJSON(w);
 	}
 	w.endArray();
 	w.kv("received", (unsigned long long)raw_counter.received);

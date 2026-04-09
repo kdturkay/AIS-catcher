@@ -455,19 +455,15 @@ bool DB::writeSinglePathJSONCompactSince(int idx, std::time_t since, JSON::Write
 
 bool DB::hasPathPointsSince(int idx, std::time_t since)
 {
-	uint32_t mmsi = ships[idx].mmsi;
+	// Path list is reverse-chronological — the head is the most recent
+	// point. If the head is older than `since`, nothing newer exists;
+	// otherwise at least one point is in the window. Coordinate validity
+	// is filtered at write time by writeSinglePathJSONCompactSince.
 	int ptr = ships[idx].path_ptr;
 	int t = ships[idx].count + 1;
-	while (isNextPathPoint(ptr, mmsi, t))
-	{
-		if ((long int)paths[ptr].timestamp_end < (long int)since)
-			return false;
-		if (isValidCoord(paths[ptr].lat, paths[ptr].lon))
-			return true;
-		t = paths[ptr].count;
-		ptr = paths[ptr].next;
-	}
-	return false;
+	if (!isNextPathPoint(ptr, ships[idx].mmsi, t))
+		return false;
+	return (long int)paths[ptr].timestamp_end >= (long int)since;
 }
 
 std::string DB::getAllPathJSONSince(std::time_t since)
@@ -546,12 +542,14 @@ std::string DB::getPathJSON(uint32_t mmsi)
 {
 	std::lock_guard<std::mutex> lock(mtx);
 	int idx = findShip(mmsi);
-	if (idx == -1)
-		return "[]";
+
 	content.clear();
 	{
 		JSON::Writer w(content, 1024);
-		writeSinglePathJSONCompact(idx, w);
+		if (idx != -1)
+			writeSinglePathJSONCompact(idx, w);
+		else
+			w.beginArray().endArray();
 	}
 	return content;
 }
@@ -560,18 +558,14 @@ std::string DB::getPathGeoJSON(uint32_t mmsi)
 {
 	std::lock_guard<std::mutex> lock(mtx);
 	int idx = findShip(mmsi);
-	if (idx == -1)
-	{
-		content.assign("{\"type\":\"Feature\",\"geometry\":{\"type\":\"LineString\",\"coordinates\":[]},\"properties\":{\"mmsi\":");
-		JSON::append_uint(content, (unsigned long long)mmsi);
-		content += "}}";
-		return content;
-	}
 
 	content.clear();
 	{
 		JSON::Writer w(content, 1024);
-		writeSinglePathGeoJSON(idx, w);
+		if (idx != -1)
+			writeSinglePathGeoJSON(idx, w);
+		else
+			w.beginObject().kv("type", "Feature").key("geometry").beginObject().kv("type", "LineString").key("coordinates").beginArray().endArray().endObject().key("properties").beginObject().kv("mmsi", mmsi).endObject().endObject();
 	}
 	return content;
 }

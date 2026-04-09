@@ -151,14 +151,6 @@ public:
 			history[(end + N - 1) % N].stat.writeJSON(w, false);
 	}
 
-	std::string lastStatToJSON() {
-		std::string s;
-		JSON::Writer w(s);
-		writeLastStatJSON(w);
-		w.finish();
-		return s;
-	}
-
 	void writeJSON(JSON::Writer &w) {
 		std::lock_guard<std::mutex> l{ this->mtx };
 
@@ -189,13 +181,5 @@ public:
 		}
 		w.endArray();
 		w.endObject();
-	}
-
-	std::string toJSON() {
-		std::string s;
-		JSON::Writer w(s);
-		writeJSON(w);
-		w.finish();
-		return s;
 	}
 };
