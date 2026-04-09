@@ -68,12 +68,6 @@ namespace Protocol
 	public:
 		AddressInfo(const std::string &host, const std::string &service, const struct addrinfo *hints = nullptr) : address(nullptr), msg("")
 		{
-			if (address != nullptr)
-			{
-				freeaddrinfo(address);
-				address = nullptr;
-			}
-
 			int result = getaddrinfo(host.c_str(), service.c_str(), hints, &address);
 			if (result != 0)
 			{

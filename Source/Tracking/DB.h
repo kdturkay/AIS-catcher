@@ -65,7 +65,6 @@ class DB : public StreamIn<JSON::JSON>,
 {
 
 	JSON::Serializer builder{JSON_DICT_FULL};
-	char jsonBuf[4096];
 
 	int first, last, count, path_idx = 0;
 	std::string content, delim;
@@ -107,11 +106,12 @@ class DB : public StreamIn<JSON::JSON>,
 
 	static void getDistanceAndBearing(float lat1, float lon1, float lat2, float lon2, float &distance, int &bearing);
 
-	void getShipJSON(const Ship &ship, std::string &content, long int now);
-	std::string getSinglePathJSON(int);
-	std::string getSinglePathJSONCompact(int);
-	std::string getSinglePathJSONCompactSince(int, std::time_t, std::time_t);
-	std::string getSinglePathGeoJSON(int);
+	void getShipJSON(const Ship &ship, JSON::Writer &w, long int now);
+	void writeSinglePathJSON(int idx, JSON::Writer &w);
+	void writeSinglePathJSONCompact(int idx, JSON::Writer &w);
+	bool writeSinglePathJSONCompactSince(int idx, std::time_t since, JSON::Writer &w);
+	bool hasPathPointsSince(int idx, std::time_t since);
+	void writeSinglePathGeoJSON(int idx, JSON::Writer &w);
 	bool isNextPathPoint(int idx, uint32_t mmsi, int count) { return idx != -1 && paths[idx].mmsi == mmsi && paths[idx].count < count; }
 
 	AIS::Filter filter;
@@ -178,7 +178,7 @@ public:
 	void setOptionKey(AIS::Keys key, const std::string &arg) { filter.SetOptionKey(key, arg); }
 	void setFilter(const AIS::Filter &f) { filter = f; }
 
-	std::string getBinaryMessagesJSON() const;
+	std::string getBinaryMessagesJSON();
 
 	// Persistence functions for ship database
 	bool Save(std::ofstream &file);

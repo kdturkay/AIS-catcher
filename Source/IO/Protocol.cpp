@@ -1298,6 +1298,9 @@ namespace Protocol
 		buffer_ptr = 0;
 		received_ptr = 0;
 
+		buffer.resize(16384);
+		received.resize(16384);
+
 		if (!performHandshake())
 		{
 			Error() << "WebSocket: Handshake failed.";
@@ -1517,12 +1520,6 @@ namespace Protocol
 
 	int WebSocket::read(void *data, int data_len, int t, bool wait)
 	{
-		if (buffer.empty())
-		{
-			buffer.resize(16384);
-			received.resize(16384);
-		}
-
 		if (received_ptr >= data_len)
 		{
 			return populateData(data, data_len);

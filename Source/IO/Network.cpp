@@ -89,10 +89,11 @@ namespace IO
 				}
 				else
 				{
-					int n = builder.stringify(data[i], jsonBuf, sizeof(jsonBuf));
+					std::string s;
+					builder.stringify(data[i], s);
 					{
 						const std::lock_guard<std::mutex> lock(msg_list_mutex);
-						msg_list.push_back(std::string(jsonBuf, n));
+						msg_list.push_back(std::move(s));
 					}
 				}
 			}
@@ -373,8 +374,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int n = data[i].getNMEATagBlock(jsonBuf, sizeof(jsonBuf));
-				SendTo(jsonBuf, n);
+				json.clear();
+				data[i].getNMEATagBlock(json);
+				SendTo(json.data(), (int)json.size());
 			}
 		}
 		else if (fmt == MessageFormat::BINARY_NMEA)
@@ -384,8 +386,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int n = data[i].getBinaryNMEA(jsonBuf, sizeof(jsonBuf), tag);
-				SendTo(jsonBuf, n);
+				json.clear();
+				data[i].getBinaryNMEA(json, tag);
+				SendTo(json.data(), (int)json.size());
 			}
 		}
 		else
@@ -394,8 +397,9 @@ namespace IO
 			{
 				if (filter.include(data[i]))
 				{
-					int n = data[i].getNMEAJSON(jsonBuf, sizeof(jsonBuf), tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, uuid, "\r\n");
-					SendTo(jsonBuf, n);
+					json.clear();
+					data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, uuid, "\r\n");
+					SendTo(json.data(), (int)json.size());
 				}
 			}
 		}
@@ -413,8 +417,9 @@ namespace IO
 		{
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
-				int n = builder.stringify(data[i], jsonBuf, sizeof(jsonBuf), "\r\n");
-				SendTo(jsonBuf, n);
+				json.clear();
+				builder.stringify(data[i], json, "\r\n");
+				SendTo(json.data(), (int)json.size());
 			}
 		}
 	}
@@ -613,8 +618,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int tn = data[i].getNMEATagBlock(jsonBuf, sizeof(jsonBuf));
-				if (SendTo(jsonBuf, tn) < 0)
+				json.clear();
+				data[i].getNMEATagBlock(json);
+				if (SendTo(json.data(), (int)json.size()) < 0)
 				{
 					if (!persistent)
 					{
@@ -631,8 +637,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int bn = data[i].getBinaryNMEA(jsonBuf, sizeof(jsonBuf), tag);
-				if (SendTo(jsonBuf, bn) < 0)
+				json.clear();
+				data[i].getBinaryNMEA(json, tag);
+				if (SendTo(json.data(), (int)json.size()) < 0)
 				{
 					if (!persistent)
 					{
@@ -649,8 +656,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int n = data[i].getNMEAJSON(jsonBuf, sizeof(jsonBuf), tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, uuid, "\r\n");
-				if (SendTo(jsonBuf, n) < 0)
+				json.clear();
+				data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, uuid, "\r\n");
+				if (SendTo(json.data(), (int)json.size()) < 0)
 				{
 					if (!persistent)
 					{
@@ -669,8 +677,9 @@ namespace IO
 		{
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
-				int n = builder.stringify(data[i], jsonBuf, sizeof(jsonBuf), "\r\n");
-				if (SendTo(jsonBuf, n) < 0)
+				json.clear();
+				builder.stringify(data[i], json, "\r\n");
+				if (SendTo(json.data(), (int)json.size()) < 0)
 					if (!persistent)
 					{
 						Critical() << "TCP feed: requesting termination.";
@@ -845,8 +854,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int tn = data[i].getNMEATagBlock(jsonBuf, sizeof(jsonBuf));
-				SendAllDirect(jsonBuf, tn);
+				json.clear();
+				data[i].getNMEATagBlock(json);
+				SendAllDirect(json.data(), (int)json.size());
 			}
 		}
 		else if (fmt == MessageFormat::BINARY_NMEA)
@@ -856,8 +866,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int n = data[i].getBinaryNMEA(jsonBuf, sizeof(jsonBuf), tag);
-				SendAllDirect(jsonBuf, n);
+				json.clear();
+				data[i].getBinaryNMEA(json, tag);
+				SendAllDirect(json.data(), (int)json.size());
 			}
 		}
 		else
@@ -867,8 +878,9 @@ namespace IO
 				if (!filter.include(data[i]))
 					continue;
 
-				int n = data[i].getNMEAJSON(jsonBuf, sizeof(jsonBuf), tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, "", "\r\n");
-				SendAllDirect(jsonBuf, n);
+				json.clear();
+				data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, "", "\r\n");
+				SendAllDirect(json.data(), (int)json.size());
 			}
 		}
 	}
@@ -879,8 +891,9 @@ namespace IO
 		{
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
-				int n = builder.stringify(data[i], jsonBuf, sizeof(jsonBuf), "\r\n");
-				SendAllDirect(jsonBuf, n);
+				json.clear();
+				builder.stringify(data[i], json, "\r\n");
+				SendAllDirect(json.data(), (int)json.size());
 			}
 		}
 	}
@@ -962,13 +975,15 @@ namespace IO
 			}
 			else if (fmt == MessageFormat::BINARY_NMEA)
 			{
-				int n = data[i].getBinaryNMEA(jsonBuf, sizeof(jsonBuf), tag);
-				((Protocol::MQTT *)session)->send(jsonBuf, n, topic_template.get(tag, data[0]));
+				json.clear();
+				data[i].getBinaryNMEA(json, tag);
+				((Protocol::MQTT *)session)->send(json.data(), (int)json.size(), topic_template.get(tag, data[0]));
 			}
 			else
 			{
-				int n = data[i].getNMEAJSON(jsonBuf, sizeof(jsonBuf), tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, false, tag.ipv4, "", "\n");
-				((Protocol::MQTT *)session)->send(jsonBuf, n, topic_template.get(tag, data[0]));
+				json.clear();
+				data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, false, tag.ipv4, "", "\n");
+				((Protocol::MQTT *)session)->send(json.data(), (int)json.size(), topic_template.get(tag, data[0]));
 			}
 		}
 
@@ -981,8 +996,9 @@ namespace IO
 		{
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
-				int n = builder.stringify(data[i], jsonBuf, sizeof(jsonBuf), "\n");
-				((Protocol::MQTT *)session)->send(jsonBuf, n, topic_template.get(tag, *((AIS::Message *)data[0].binary)));
+				json.clear();
+				builder.stringify(data[i], json, "\n");
+				((Protocol::MQTT *)session)->send(json.data(), (int)json.size(), topic_template.get(tag, *((AIS::Message *)data[0].binary)));
 			}
 		}
 

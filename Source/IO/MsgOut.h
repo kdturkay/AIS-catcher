@@ -38,7 +38,6 @@ namespace IO
 	{
 	protected:
 		std::string json;
-		char jsonBuf[4096];
 		AIS::Filter filter;
 		JSON::Serializer builder{JSON_DICT_FULL};
 

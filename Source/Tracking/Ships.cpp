@@ -124,69 +124,63 @@ bool Ship::getKML(std::string &kmlString) const
 	return true;
 }
 
-bool Ship::getGeoJSON(std::string &s) const
+bool Ship::getGeoJSON(JSON::Writer &w) const
 {
+	w.beginObject();
+	w.kv("type", "Feature");
+	w.key("properties");
+	w.beginObject();
 
-	const std::string coordinates = "[" + std::to_string(lon) + "," + std::to_string(lat) + "]";
+	w.kv("mmsi", mmsi);
 
-	s += "{\"type\":\"Feature\",\"properties\":";
+	w.kv("distance", distance)
+	 .kv("bearing", angle)
+	 .kv_unless("level", level, LEVEL_UNDEFINED)
+	 .kv("count", count)
+	 .kv_unless("ppm", ppm, PPM_UNDEFINED)
+	 .kv("group_mask", group_mask)
+	 .kv("approx", (bool)getApproximate())
+	 .kv_unless("heading", heading, HEADING_UNDEFINED)
+	 .kv_unless("cog", cog, COG_UNDEFINED)
+	 .kv_unless("speed", speed, SPEED_UNDEFINED)
+	 .kv_unless("to_bow", to_bow, DIMENSION_UNDEFINED)
+	 .kv_unless("to_stern", to_stern, DIMENSION_UNDEFINED)
+	 .kv_unless("to_starboard", to_starboard, DIMENSION_UNDEFINED)
+	 .kv_unless("to_port", to_port, DIMENSION_UNDEFINED)
+	 .kv("shiptype", shiptype)
+	 .kv("mmsi_type", mmsi_type)
+	 .kv("shipclass", shipclass)
+	 .kv("validated", getValidated())
+	 .kv("msg_type", msg_type)
+	 .kv("channels", getChannels())
+	 .kv("country", country_code)
+	 .kv("status", status)
+	 .kv("draught", draught)
+	 .kv_unless("eta_month", (int)month, ETA_MONTH_UNDEFINED)
+	 .kv_unless("eta_day", (int)day, ETA_DAY_UNDEFINED)
+	 .kv_unless("eta_hour", (int)hour, ETA_HOUR_UNDEFINED)
+	 .kv_unless("eta_minute", (int)minute, ETA_MINUTE_UNDEFINED)
+	 .kv_unless("imo", IMO, IMO_UNDEFINED)
+	 .kv("callsign", callsign);
 
-	const std::string null_str = "null";
-	std::string str;
+	if (getVirtualAid())
+		w.kv("shipname", shipname, " [V]", 4);
+	else
+		w.kv("shipname", shipname);
 
-	s += "{\"mmsi\":" + std::to_string(mmsi) + ",";
-
-	s += "\"distance\":" + std::to_string(distance) + ",";
-	s += "\"bearing\":" + std::to_string(angle) + ",";
-
-	s += "\"level\":" + (level == LEVEL_UNDEFINED ? null_str : std::to_string(level)) + ",";
-	s += "\"count\":" + std::to_string(count) + ",";
-	s += "\"ppm\":" + (ppm == PPM_UNDEFINED ? null_str : std::to_string(ppm)) + ",";
-	s += "\"group_mask\":" + std::to_string(group_mask) + ",";
-	s += "\"approx\":" + std::string(getApproximate() ? "true" : "false") + ",";
-
-	s += "\"heading\":" + ((heading == HEADING_UNDEFINED) ? null_str : std::to_string(heading)) + ",";
-	s += "\"cog\":" + ((cog == COG_UNDEFINED) ? null_str : std::to_string(cog)) + ",";
-	s += "\"speed\":" + ((speed == SPEED_UNDEFINED) ? null_str : std::to_string(speed)) + ",";
-
-	s += "\"to_bow\":" + ((to_bow == DIMENSION_UNDEFINED) ? null_str : std::to_string(to_bow)) + ",";
-	s += "\"to_stern\":" + ((to_stern == DIMENSION_UNDEFINED) ? null_str : std::to_string(to_stern)) + ",";
-	s += "\"to_starboard\":" + ((to_starboard == DIMENSION_UNDEFINED) ? null_str : std::to_string(to_starboard)) + ",";
-	s += "\"to_port\":" + ((to_port == DIMENSION_UNDEFINED) ? null_str : std::to_string(to_port)) + ",";
-
-	s += "\"shiptype\":" + std::to_string(shiptype) + ",";
-	s += "\"mmsi_type\":" + std::to_string(mmsi_type) + ",";
-	s += "\"shipclass\":" + std::to_string(shipclass) + ",";
-
-	s += "\"validated\":" + std::to_string(getValidated()) + ",";
-	s += "\"msg_type\":" + std::to_string(msg_type) + ",";
-	s += "\"channels\":" + std::to_string(getChannels()) + ",";
-	s += "\"country\":\"" + std::string(country_code) + "\",";
-	s += "\"status\":" + std::to_string(status) + ",";
-
-	s += "\"draught\":" + std::to_string(draught) + ",";
-
-	s += "\"eta_month\":" + ((month == ETA_MONTH_UNDEFINED) ? null_str : std::to_string(month)) + ",";
-	s += "\"eta_day\":" + ((day == ETA_DAY_UNDEFINED) ? null_str : std::to_string(day)) + ",";
-	s += "\"eta_hour\":" + ((hour == ETA_HOUR_UNDEFINED) ? null_str : std::to_string(hour)) + ",";
-	s += "\"eta_minute\":" + ((minute == ETA_MINUTE_UNDEFINED) ? null_str : std::to_string(minute)) + ",";
-
-	s += "\"imo\":" + ((IMO == IMO_UNDEFINED) ? null_str : std::to_string(IMO)) + ",";
-
-	s += "\"callsign\":";
-	str = std::string(callsign);
-	JSON::stringify(str, s);
-
-	s += ",\"shipname\":";
-	str = std::string(shipname) + (getVirtualAid() ? std::string(" [V]") : std::string(""));
-	JSON::stringify(str, s);
-
-	s += ",\"destination\":";
-	str = std::string(destination);
-	JSON::stringify(str, s);
-
-	s += ",\"last_signal\":" + std::to_string(last_signal);
-	s += "},\"geometry\":{\"type\":\"Point\",\"coordinates\":" + coordinates + "}}";
+	w.kv("destination", destination)
+	 .kv("last_signal", last_signal)
+	 .endObject() // properties
+	 .key("geometry")
+	 .beginObject()
+	 .kv("type", "Point")
+	 .key("coordinates")
+	 .beginArray()
+	 .val(lon)
+	 .val(lat)
+	 .endArray()
+	 .endObject()  // geometry
+	 .endObject(); // feature
 
 	return true;
 }

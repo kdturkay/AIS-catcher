@@ -61,8 +61,9 @@ namespace IO
 					break;
 				case MessageFormat::NMEA_TAG:
 				{
-					int n = data[i].getNMEATagBlock(jsonBuf, sizeof(jsonBuf));
-					std::cout.write(jsonBuf, n);
+					json.clear();
+					data[i].getNMEATagBlock(json);
+					std::cout.write(json.data(), json.size());
 					break;
 				}
 				case MessageFormat::FULL:
@@ -88,8 +89,9 @@ namespace IO
 					break;
 				case MessageFormat::JSON_NMEA:
 				{
-					int n = data[i].getNMEAJSON(jsonBuf, sizeof(jsonBuf), tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, 0, "", "\n");
-					std::cout.write(jsonBuf, n);
+					json.clear();
+					data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, 0, "", "\n");
+					std::cout.write(json.data(), json.size());
 				}
 				break;
 				default:
@@ -105,8 +107,9 @@ namespace IO
 		{
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
-				int n = builder.stringify(data[i], jsonBuf, sizeof(jsonBuf), "\n");
-				std::cout.write(jsonBuf, n);
+				json.clear();
+				builder.stringify(data[i], json, "\n");
+				std::cout.write(json.data(), json.size());
 			}
 		}
 	}

@@ -279,7 +279,6 @@ std::string WebViewer::decodeNMEAtoJSON(const std::string &nmea_input, bool enha
 		AIS::NMEA nmea_decoder;
 		AIS::JSONAIS json_converter;
 		JSON::Serializer *builder;
-		char jsonBuf[4096];
 		std::string result;
 		bool first;
 		size_t message_count;
@@ -305,8 +304,7 @@ std::string WebViewer::decodeNMEAtoJSON(const std::string &nmea_input, bool enha
 					result += ",";
 
 				first = false;
-				int n = builder->stringify(data[i], jsonBuf, sizeof(jsonBuf));
-				result.append(jsonBuf, n);
+				builder->stringify(data[i], result);
 				message_count++;
 			}
 		}

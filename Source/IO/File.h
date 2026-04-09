@@ -75,8 +75,9 @@ namespace IO
 					if (!filter.include(data[i]))
 						continue;
 
-					int n = data[i].getNMEATagBlock(jsonBuf, sizeof(jsonBuf));
-					file.write(jsonBuf, n);
+					json.clear();
+					data[i].getNMEATagBlock(json);
+					file.write(json.data(), json.size());
 				}
 			}
 			else if (fmt == MessageFormat::BINARY_NMEA)
@@ -86,8 +87,9 @@ namespace IO
 					if (!filter.include(data[i]))
 						continue;
 
-					int n = data[i].getBinaryNMEA(jsonBuf, sizeof(jsonBuf), tag);
-					file.write(jsonBuf, n);
+					json.clear();
+					data[i].getBinaryNMEA(json, tag);
+					file.write(json.data(), json.size());
 				}
 			}
 			else
@@ -97,8 +99,9 @@ namespace IO
 					if (!filter.include(data[i]))
 						continue;
 
-					int n = data[i].getNMEAJSON(jsonBuf, sizeof(jsonBuf), tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, false, tag.ipv4, "", "\n");
-					file.write(jsonBuf, n);
+					json.clear();
+					data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, false, tag.ipv4, "", "\n");
+					file.write(json.data(), json.size());
 				}
 			}
 
@@ -115,8 +118,9 @@ namespace IO
 			{
 				if (filter.include(*(AIS::Message *)data[i].binary))
 				{
-					int n = builder.stringify(data[i], jsonBuf, sizeof(jsonBuf), "\n");
-					file.write(jsonBuf, n);
+					json.clear();
+					builder.stringify(data[i], json, "\n");
+					file.write(json.data(), json.size());
 				}
 			}
 			if (file.fail())

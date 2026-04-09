@@ -24,6 +24,8 @@
 #include "Common.h"
 #include "PackedInt.h"
 
+namespace JSON { class Writer; }
+
 const int CLASS_A_MASK = (1 << 1) | (1 << 2) | (1 << 3);
 const int CLASS_B_MASK = (1 << 18) | (1 << 19);
 
@@ -60,7 +62,7 @@ struct Ship
     int getShipTypeClass();
     void setType();
     bool getKML(std::string &) const;
-    bool getGeoJSON(std::string &) const;
+    bool getGeoJSON(JSON::Writer &) const;
 
     // File persistence functions
     bool Save(std::ofstream &file) const;

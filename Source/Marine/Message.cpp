@@ -18,6 +18,7 @@
 #include "Message.h"
 #include "Parse.h"
 #include "Helper.h"
+#include "JSON/StringBuilder.h"
 
 namespace AIS
 {
@@ -77,286 +78,111 @@ namespace AIS
 			return json;
 	}
 
-	std::string Message::getNMEAJSON(unsigned mode, float level, float ppm, int status, const std::string &hardware, int version, Type driver, bool include_ssl, uint32_t ipv4, const std::string &uuid) const
+	int Message::getNMEAJSON(std::string &out, unsigned mode, float level, float ppm, int status, const std::string &hardware, int version, Type driver, bool include_ssl, uint32_t ipv4, const std::string &uuid, const char *suffix) const
 	{
-		std::stringstream ss;
+		JSON::Writer w(out);
 
-		ss << "{\"class\":\"AIS\",\"device\":\"AIS-catcher\",\"version\":" << version << ",\"driver\":" << (int)driver << ",\"hardware\":\"" << hardware << "\",\"channel\":\"" << getChannel() << "\",\"repeat\":" << repeat();
-
-		if (include_ssl)
-			ss << ",\"ssc\":" << start_idx << ",\"sl\":" << (end_idx - start_idx);
-
-		if (status)
-		{
-			ss << ",\"msg_status\":" << status;
-		}
-
-		if (mode & 2)
-		{
-			std::stringstream ts;
-			if ((rxtime % 1000000) != 0)
-				ts << std::fixed << std::setprecision(6) << ((double)rxtime / 1000000.0);
-			else
-				ts << (rxtime / 1000000);
-
-			ss << ",\"rxuxtime\":" << ts.str();
-			ss << ",\"rxtime\":\"" << getRxTime() << "\"";
-		}
-
-		if (toa != 0)
-		{
-			std::stringstream ts;
-			if ((toa % 1000000) != 0)
-				ts << std::fixed << std::setprecision(6) << ((double)toa / 1000000.0);
-			else
-				ts << (toa / 1000000);
-
-			ss << ",\"toa\":" << ts.str();
-		}
-
-		if (!uuid.empty())
-			ss << ",\"uuid\":\"" << uuid << "\"";
-
-		if (ipv4)
-			ss << ",\"ipv4\":" << ipv4;
-
-		if (mode & 1)
-		{
-			ss << ",\"signalpower\":";
-			if (level == LEVEL_UNDEFINED)
-				ss << "null";
-			else
-				ss << level;
-			ss << ",\"ppm\":";
-			if (ppm == PPM_UNDEFINED)
-				ss << "null";
-			else
-				ss << ppm;
-		}
-
-		if (getStation())
-			ss << ",\"station_id\":" << getStation();
-
-		if (getLength() > 0)
-			ss << ",\"mmsi\":" << mmsi() << ",\"type\":" << type();
-
-		ss << ",\"nmea\":[";
-		const char *delim = "";
-		for (const auto &n : NMEA)
-		{
-			ss << delim << "\"" << n << "\"";
-			delim = ",";
-		}
-		ss << "]}";
-
-		return ss.str();
-	}
-
-	int Message::getNMEAJSON(char *buf, int len, unsigned mode, float level, float ppm, int status, const std::string &hardware, int version, Type driver, bool include_ssl, uint32_t ipv4, const std::string &uuid, const char *suffix) const
-	{
-		char *ptr = buf;
-		char *end = buf + len - 1;
-
-		auto ap = [&](char c)
-		{ if (ptr < end) *ptr++ = c; };
-		auto aps = [&](const char *s)
-		{ while (*s && ptr < end) *ptr++ = *s++; };
-		auto apm = [&](const char *s, int n)
-		{ int a = end - ptr; if (n < a) a = n; memcpy(ptr, s, a); ptr += a; };
-		auto api = [&](long long v)
-		{
-			if (v < 0)
-			{
-				ap('-');
-				v = -v;
-			}
-			char tmp[20];
-			int tl = 0;
-			do
-			{
-				tmp[tl++] = '0' + (int)(v % 10);
-				v /= 10;
-			} while (v);
-			if (ptr + tl <= end)
-				for (int i = tl - 1; i >= 0; i--)
-					*ptr++ = tmp[i];
-		};
-		auto apf6 = [&](double v)
-		{
-			if (v < 0)
-			{
-				ap('-');
-				v = -v;
-			}
-			long long scaled = (long long)(v * 1000000.0 + 0.5);
-			long long whole = scaled / 1000000;
-			int frac = (int)(scaled % 1000000);
-			api(whole);
-			if (ptr + 7 <= end)
-			{
-				*ptr++ = '.';
-				ptr[5] = '0' + frac % 10;
-				frac /= 10;
-				ptr[4] = '0' + frac % 10;
-				frac /= 10;
-				ptr[3] = '0' + frac % 10;
-				frac /= 10;
-				ptr[2] = '0' + frac % 10;
-				frac /= 10;
-				ptr[1] = '0' + frac % 10;
-				frac /= 10;
-				ptr[0] = '0' + frac;
-				ptr += 6;
-			}
-		};
-		auto apstr = [&](const std::string &s)
-		{ apm(s.data(), s.size()); };
-
-		aps("{\"class\":\"AIS\",\"device\":\"AIS-catcher\",\"version\":");
-		api(version);
-		aps(",\"driver\":");
-		api((int)driver);
-		aps(",\"hardware\":\"");
-		apstr(hardware);
-		aps("\",\"channel\":\"");
-		ap(getChannel());
-		aps("\",\"repeat\":");
-		api(repeat());
+		w.append_lit("{\"class\":\"AIS\",\"device\":\"AIS-catcher\",\"version\":");
+		w.append_int(version);
+		w.append_lit(",\"driver\":");
+		w.append_int((int)driver);
+		w.append_lit(",\"hardware\":\"");
+		w.append(hardware.data(), hardware.size());
+		w.append_lit("\",\"channel\":\"");
+		w.append(getChannel());
+		w.append_lit("\",\"repeat\":");
+		w.append_int((long long)repeat());
 
 		if (include_ssl)
 		{
-			aps(",\"ssc\":");
-			api(start_idx);
-			aps(",\"sl\":");
-			api(end_idx - start_idx);
+			w.append_lit(",\"ssc\":");
+			w.append_int((long long)start_idx);
+			w.append_lit(",\"sl\":");
+			w.append_int((long long)(end_idx - start_idx));
 		}
 
 		if (status)
 		{
-			aps(",\"msg_status\":");
-			api(status);
+			w.append_lit(",\"msg_status\":");
+			w.append_int((long long)status);
 		}
 
 		if (mode & 2)
 		{
-			aps(",\"rxuxtime\":");
+			w.append_lit(",\"rxuxtime\":");
 			if ((rxtime % 1000000) != 0)
-				apf6((double)rxtime / 1000000.0);
+				w.append_float((double)rxtime / 1000000.0);
 			else
-				api(rxtime / 1000000);
+				w.append_int(rxtime / 1000000);
 		}
 
 		if (toa != 0)
 		{
-			aps(",\"toa\":");
+			w.append_lit(",\"toa\":");
 			if ((toa % 1000000) != 0)
-				apf6((double)toa / 1000000.0);
+				w.append_float((double)toa / 1000000.0);
 			else
-				api(toa / 1000000);
+				w.append_int(toa / 1000000);
 		}
 
 		if (!uuid.empty())
 		{
-			aps(",\"uuid\":\"");
-			apstr(uuid);
-			ap('"');
+			w.append_lit(",\"uuid\":\"");
+			w.append(uuid.data(), uuid.size());
+			w.append('"');
 		}
 
 		if (ipv4)
 		{
-			aps(",\"ipv4\":");
-			api(ipv4);
+			w.append_lit(",\"ipv4\":");
+			w.append_int((long long)ipv4);
 		}
 
 		if (mode & 1)
 		{
-			aps(",\"signalpower\":");
+			w.append_lit(",\"signalpower\":");
 			if (level == LEVEL_UNDEFINED)
-				aps("null");
+				w.append_lit("null");
 			else
-				apf6(level);
-			aps(",\"ppm\":");
+				w.append_float(level);
+			w.append_lit(",\"ppm\":");
 			if (ppm == PPM_UNDEFINED)
-				aps("null");
+				w.append_lit("null");
 			else
-				apf6(ppm);
+				w.append_float(ppm);
 		}
 
 		if (getStation())
 		{
-			aps(",\"station_id\":");
-			api(getStation());
+			w.append_lit(",\"station_id\":");
+			w.append_int((long long)getStation());
 		}
 
 		if (getLength() > 0)
 		{
-			aps(",\"mmsi\":");
-			api(mmsi());
-			aps(",\"type\":");
-			api(type());
+			w.append_lit(",\"mmsi\":");
+			w.append_int((long long)mmsi());
+			w.append_lit(",\"type\":");
+			w.append_int((long long)type());
 		}
 
-		aps(",\"nmea\":[");
+		w.append_lit(",\"nmea\":[");
 		for (int i = 0; i < (int)NMEA.size(); i++)
 		{
-			if (i > 0)
-				ap(',');
-			ap('"');
-			apstr(NMEA[i]);
-			ap('"');
+			if (i > 0) w.append(',');
+			w.append('"');
+			w.append(NMEA[i].data(), NMEA[i].size());
+			w.append('"');
 		}
-		aps("]}");
-		if (suffix)
-			aps(suffix);
+		w.append_lit("]}");
+		if (suffix) w.append_lit(suffix);
 
-		*ptr = '\0';
-		return ptr - buf;
+		return w.finish();
 	}
 
-	std::string Message::getNMEATagBlock() const
+	int Message::getNMEATagBlock(std::string &out, const char *suffix) const
 	{
 		static int groupId = 0;
-
-		std::string result;
-		int total = NMEA.size();
-		int seq = 1;
-
-		if (total > 1)
-			groupId = (groupId % 9999) + 1; // Recycle 1-9999
-
-		// Use station ID with 's' prefix as source
-		std::string src = "s" + std::to_string(station);
-
-		for (const auto &nmea : NMEA)
-		{
-			std::stringstream tb;
-			tb << "s:" << src << ",c:" << std::fixed << std::setprecision(6) << ((double)rxtime / 1000000.0);
-
-			if (total > 1)
-				tb << ",g:" << seq << "-" << total << "-" << groupId;
-
-			// Calculate checksum for tag block
-			std::string tbs = tb.str();
-			int check = 0;
-			for (char c : tbs)
-				check ^= c;
-
-			std::stringstream ss;
-			ss << "\\" << tbs << "*" << std::hex << std::uppercase << std::setfill('0') << std::setw(2) << check << "\\" << nmea << "\r\n";
-
-			result += ss.str();
-			seq++;
-		}
-
-		return result;
-	}
-
-	int Message::getNMEATagBlock(char *buf, int len, const char *suffix) const
-	{
-		static int groupId = 0;
-
-		char *ptr = buf;
-		char *end = buf + len - 1;
 
 		int total = NMEA.size();
 		int seq = 1;
@@ -364,258 +190,80 @@ namespace AIS
 		if (total > 1)
 			groupId = (groupId % 9999) + 1;
 
-		auto ap = [&](char c)
-		{ if (ptr < end) *ptr++ = c; };
-		auto aps = [&](const char *s)
-		{ while (*s && ptr < end) *ptr++ = *s++; };
-		auto apm = [&](const char *s, int n)
-		{ int a = end - ptr; if (n > a) n = a; memcpy(ptr, s, n); ptr += n; };
-		auto api = [&](int v)
-		{
-			char tmp[12];
-			int n = 0;
-			if (v < 0)
-			{
-				ap('-');
-				v = -v;
-			}
-			do
-			{
-				tmp[n++] = '0' + v % 10;
-				v /= 10;
-			} while (v);
-			if (ptr + n <= end)
-				for (int i = n - 1; i >= 0; i--)
-					*ptr++ = tmp[i];
-		};
-		auto apf6 = [&](double v)
-		{
-			if (v < 0)
-			{
-				ap('-');
-				v = -v;
-			}
-			long long scaled = (long long)(v * 1000000.0 + 0.5);
-			long long whole = scaled / 1000000;
-			int frac = (int)(scaled % 1000000);
-			// write whole part
-			char tmp[20];
-			int n = 0;
-			do
-			{
-				tmp[n++] = '0' + (int)(whole % 10);
-				whole /= 10;
-			} while (whole);
-			if (ptr + n <= end)
-				for (int i = n - 1; i >= 0; i--)
-					*ptr++ = tmp[i];
-			// write fractional part
-			if (ptr + 7 <= end)
-			{
-				*ptr++ = '.';
-				ptr[5] = '0' + frac % 10;
-				frac /= 10;
-				ptr[4] = '0' + frac % 10;
-				frac /= 10;
-				ptr[3] = '0' + frac % 10;
-				frac /= 10;
-				ptr[2] = '0' + frac % 10;
-				frac /= 10;
-				ptr[1] = '0' + frac % 10;
-				frac /= 10;
-				ptr[0] = '0' + frac;
-				ptr += 6;
-			}
-		};
+		JSON::Writer w(out);
 
 		// source string: "s" + station number
 		char src[16];
-		char *sp = src;
-		*sp++ = 's';
+		int srcLen;
 		{
+			char *sp = src;
+			*sp++ = 's';
 			char tmp[12];
 			int n = 0;
 			int v = station;
-			if (v < 0)
-			{
-				*sp++ = '-';
-				v = -v;
-			}
-			do
-			{
-				tmp[n++] = '0' + v % 10;
-				v /= 10;
-			} while (v);
-			for (int i = n - 1; i >= 0; i--)
-				*sp++ = tmp[i];
+			if (v < 0) { *sp++ = '-'; v = -v; }
+			do { tmp[n++] = '0' + v % 10; v /= 10; } while (v);
+			for (int i = n - 1; i >= 0; i--) *sp++ = tmp[i];
+			srcLen = sp - src;
 		}
-		int srcLen = sp - src;
 
 		for (const auto &nmea : NMEA)
 		{
-			ap('\\');
-			char *cs_start = ptr; // checksum starts after backslash
+			w.append('\\');
+			size_t cs_off = w.written(); // checksum starts after backslash
 
-			aps("s:");
-			apm(src, srcLen);
-			aps(",c:");
-			apf6((double)rxtime / 1000000.0);
+			w.append_lit("s:");
+			w.append(src, srcLen);
+			w.append_lit(",c:");
+			w.append_float((double)rxtime / 1000000.0);
 
 			if (total > 1)
 			{
-				aps(",g:");
-				api(seq);
-				ap('-');
-				api(total);
-				ap('-');
-				api(groupId);
+				w.append_lit(",g:");
+				w.append_int((long long)seq);
+				w.append('-');
+				w.append_int((long long)total);
+				w.append('-');
+				w.append_int((long long)groupId);
 			}
 
-			// Calculate checksum over tag block content (between backslashes)
+			// Calculate checksum over tag block content (between backslashes).
+			// Re-derive base pointer here since intermediate writes may have grown the buffer.
 			int check = 0;
-			for (char *p = cs_start; p < ptr; p++)
-				check ^= *p;
+			const char *base = w.buffer_start();
+			const char *cs_end = base + w.written();
+			for (const char *p = base + cs_off; p < cs_end; p++)
+				check ^= (unsigned char)*p;
 
-			ap('*');
-			// Two hex digits uppercase
+			w.append('*');
 			static const char hex[] = "0123456789ABCDEF";
-			ap(hex[(check >> 4) & 0xF]);
-			ap(hex[check & 0xF]);
-			ap('\\');
+			w.append(hex[(check >> 4) & 0xF]);
+			w.append(hex[check & 0xF]);
+			w.append('\\');
 
-			apm(nmea.data(), nmea.size());
-			if (suffix)
-				aps(suffix);
-			else
-				aps("\r\n");
+			w.append(nmea.data(), nmea.size());
+			if (suffix) w.append_lit(suffix);
+			else        w.append_lit("\r\n");
 
 			seq++;
 		}
 
-		*ptr = '\0';
-		return ptr - buf;
+		return w.finish();
 	}
 
-	std::string Message::getBinaryNMEA(const TAG &tag, bool crc) const
+	int Message::getBinaryNMEA(std::string &out, const TAG &tag, bool crc, const char *suffix) const
 	{
-		std::string packet;
-
-		if (length < 0 || length > MAX_AIS_LENGTH)
-			return packet;
-
-		auto push_escaped = [&](unsigned char byte) -> void
-		{
-			if (byte == '\n')
-			{
-				packet.push_back((char)0xad); // ESC
-				packet.push_back((char)0xae);
-			}
-			else if (byte == '\r')
-			{
-				packet.push_back((char)0xad); // ESC
-				packet.push_back((char)0xaf);
-			}
-			else if (byte == 0xad) // Also escape ESC itself
-			{
-				packet.push_back((char)0xad);
-				packet.push_back((char)0xad);
-			}
-			else
-			{
-				packet.push_back((char)byte);
-			}
-		};
-
-		// Start byte: 0xac
-		push_escaped(0xac);
-
-		// Version: 0
-		push_escaped(0x00);
-
-		// Flags byte: bit 0 = has signal/ppm, bit 1 = has CRC
-		unsigned char flags = 0;
-
-		if (tag.level != LEVEL_UNDEFINED && tag.ppm != PPM_UNDEFINED)
-			flags |= 0x01;
-
-		flags |= crc ? 0x02 : 0x00;
-
-		push_escaped(flags);
-
-		// Timestamp: 8 bytes (long long)
-		long long ts = (long long)rxtime;
-		for (int i = 7; i >= 0; i--)
-		{
-			push_escaped((ts >> (i * 8)) & 0xFF);
-		}
-
-		if (flags & 0x01)
-		{
-			int signal_tenths = (int)(tag.level * 10.0f);
-
-			push_escaped((signal_tenths >> 8) & 0xFF);
-			push_escaped(signal_tenths & 0xFF);
-
-			int ppm_tenths = (int)(tag.ppm * 10.0f);
-			push_escaped((unsigned char)(int8_t)ppm_tenths);
-		}
-
-		push_escaped((unsigned char)channel);
-
-		push_escaped((length >> 8) & 0xFF);
-		push_escaped(length & 0xFF);
-
-		// AIS message data
-		int numBytes = (length + 7) / 8;
-		for (int i = 0; i < numBytes; i++)
-		{
-			push_escaped(data[i]);
-		}
-
-		if (crc)
-		{
-			uint16_t crc_value = Util::Helper::CRC16((const uint8_t *)packet.data(), packet.size());
-			push_escaped((crc_value >> 8) & 0xFF);
-			push_escaped(crc_value & 0xFF);
-		}
-
-		// End character: \n (not escaped)
-		packet.push_back('\n');
-
-		return packet;
-	}
-
-	int Message::getBinaryNMEA(char *buf, int len, const TAG &tag, bool crc, const char *suffix) const
-	{
-		char *ptr = buf;
-		char *end = buf + len;
-
 		if (length < 0 || length > MAX_AIS_LENGTH)
 			return 0;
 
+		JSON::Writer w(out);
+
 		auto push_escaped = [&](unsigned char byte)
 		{
-			if (ptr + 2 > end)
-				return;
-			if (byte == '\n')
-			{
-				*ptr++ = (char)0xad;
-				*ptr++ = (char)0xae;
-			}
-			else if (byte == '\r')
-			{
-				*ptr++ = (char)0xad;
-				*ptr++ = (char)0xaf;
-			}
-			else if (byte == 0xad)
-			{
-				*ptr++ = (char)0xad;
-				*ptr++ = (char)0xad;
-			}
-			else
-			{
-				*ptr++ = (char)byte;
-			}
+			if (byte == '\n')      { w.append((char)0xad); w.append((char)0xae); }
+			else if (byte == '\r') { w.append((char)0xad); w.append((char)0xaf); }
+			else if (byte == 0xad) { w.append((char)0xad); w.append((char)0xad); }
+			else                   { w.append((char)byte); }
 		};
 
 		push_escaped(0xac);
@@ -651,18 +299,16 @@ namespace AIS
 
 		if (crc)
 		{
-			uint16_t crc_value = Util::Helper::CRC16((const uint8_t *)buf, ptr - buf);
+			// Re-derive base pointer here: buffer may have grown during writes.
+			uint16_t crc_value = Util::Helper::CRC16((const uint8_t *)w.buffer_start(), w.written());
 			push_escaped((crc_value >> 8) & 0xFF);
 			push_escaped(crc_value & 0xFF);
 		}
 
-		if (suffix)
-			while (*suffix && ptr < end)
-				*ptr++ = *suffix++;
-		else if (ptr < end)
-			*ptr++ = '\n';
+		if (suffix) w.append_lit(suffix);
+		else        w.append('\n');
 
-		return ptr - buf;
+		return w.finish();
 	}
 
 	bool Message::validate()

@@ -26,7 +26,6 @@ namespace IO
 	{
 	private:
 		bool include_sample_start = false;
-		char jsonBuf[4096];
 
 	public:
 		int verboseUpdateTime = 3;
