@@ -21,24 +21,46 @@
 
 namespace JSON {
 
-	void stringify(const std::string& str, std::string& json, bool esc) {
+	void stringify(const char *s, size_t len, std::string& json, bool esc) {
 		if (esc) json += '\"';
-		const char *s = str.data();
-		size_t len = str.size();
 		size_t start = 0;
 
 		for (size_t i = 0; i < len; i++) {
-			char c = s[i];
-			if (c == '\"' || c == '\\' || c == '\n' || c == '\r' || c == '\0') {
-				if (i > start) json.append(s + start, i - start);
-				if (c == '\"') json.append("\\\"", 2);
-				else if (c == '\\') json.append("\\\\", 2);
-				else if (c == '\n') json.append("\\n", 2);
-				// \r and \0 silently dropped
-				start = i + 1;
+			unsigned char c = (unsigned char)s[i];
+			if (c >= 0x20 && c != '"' && c != '\\')
+				continue;
+
+			if (i > start) json.append(s + start, i - start);
+
+			switch (c) {
+			case '"':  json.append("\\\"", 2); break;
+			case '\\': json.append("\\\\", 2); break;
+			case '\b': json.append("\\b", 2);  break;
+			case '\f': json.append("\\f", 2);  break;
+			case '\n': json.append("\\n", 2);  break;
+			case '\r': json.append("\\r", 2);  break;
+			case '\t': json.append("\\t", 2);  break;
+			default: {
+				static const char hex[] = "0123456789abcdef";
+				char esc_buf[6] = { '\\', 'u', '0', '0', hex[(c >> 4) & 0xF], hex[c & 0xF] };
+				json.append(esc_buf, 6);
+				break;
 			}
+			}
+			start = i + 1;
 		}
 		if (len > start) json.append(s + start, len - start);
 		if (esc) json += '\"';
+	}
+
+	void append_uint(std::string &out, unsigned long long v)
+	{
+		char buf[20];
+		char *p = buf + sizeof(buf);
+		do {
+			*--p = (char)('0' + (int)(v % 10));
+			v /= 10;
+		} while (v);
+		out.append(p, (buf + sizeof(buf)) - p);
 	}
 }
