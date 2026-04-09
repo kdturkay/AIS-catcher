@@ -340,7 +340,12 @@ namespace JSON
 
 		void append_float(double v)
 		{
-			if (v != v)
+			// Single range-check catches NaN, ±Inf, and |v| >= 1e18 in one
+			// branch: NaN comparisons are always false, ±Inf fails one side,
+			// and 1e18 keeps |whole| comfortably under LLONG_MAX so the
+			// (long long)v cast in put_float_raw is well-defined and the
+			// post-rounding `whole++` cannot overflow.
+			if (!(v > -1e18 && v < 1e18))
 			{
 				reserve_more(4);
 				put_bytes("null", 4);
@@ -457,7 +462,9 @@ namespace JSON
 		}
 		Writer &val(double v)
 		{
-			if (v != v)
+			// Single range-check catches NaN, ±Inf, and |v| >= 1e18 in one
+			// branch — see append_float() for rationale.
+			if (!(v > -1e18 && v < 1e18))
 			{
 				reserve_more(5);
 				put_sep_raw();
@@ -604,7 +611,9 @@ namespace JSON
 			reserve_more(klen + 32); // sep + key + sign + 20 + '.' + 6
 			put_sep_raw();
 			put_kvkey_raw(k, klen);
-			if (v != v)
+			// Single range-check catches NaN, ±Inf, and |v| >= 1e18 in one
+			// branch — see append_float() for rationale.
+			if (!(v > -1e18 && v < 1e18))
 				put_bytes("null", 4);
 			else
 				put_float_raw(v);

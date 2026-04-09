@@ -81,12 +81,7 @@ void PluginManager::setReceivers(const std::vector<std::unique_ptr<ReceiverTrack
 			JSON::Writer w(params);
 			w.beginArray();
 			for (int i = 0; i < (int)states.size(); i++)
-			{
-				w.beginObject();
-				w.kv("idx", i);
-				w.kv("label", states[i]->label);
-				w.endObject();
-			}
+				w.beginObject().kv("idx", i).kv("label", states[i]->label).endObject();
 			w.endArray();
 		}
 		params += ";\n";
@@ -218,13 +213,13 @@ void SSEStreamer::Receive(const JSON::JSON *data, int len, TAG &tag)
 		{
 			std::string json;
 			JSON::Writer w(json);
-			w.beginObject();
-			w.kv("mmsi", m->mmsi());
-			w.kv("timestamp", (long long)now);
-			w.kv("channel", &channel, 1);
-			w.kv("type", m->type());
-			w.kv("shipname", tag.shipname);
-			w.key("nmea").beginArray();
+			w.beginObject()
+				.kv("mmsi", m->mmsi())
+				.kv("timestamp", (long long)now)
+				.kv("channel", &channel, 1)
+				.kv("type", m->type())
+				.kv("shipname", tag.shipname)
+				.key("nmea").beginArray();
 
 			for (const auto &s : m->NMEA)
 			{
@@ -264,12 +259,12 @@ void SSEStreamer::Receive(const JSON::JSON *data, int len, TAG &tag)
 		{
 			std::string json;
 			JSON::Writer w(json);
-			w.beginObject();
-			w.kv("mmsi", m->mmsi());
-			w.kv("channel", &channel, 1);
-			w.kv("lat", tag.lat);
-			w.kv("lon", tag.lon);
-			w.endObject();
+			w.beginObject()
+				.kv("mmsi", m->mmsi())
+				.kv("channel", &channel, 1)
+				.kv("lat", tag.lat)
+				.kv("lon", tag.lon)
+				.endObject();
 			w.finish();
 			server->sendSSE(2, "nmea", json);
 		}
