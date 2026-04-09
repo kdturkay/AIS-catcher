@@ -307,8 +307,7 @@ namespace JSON
 
 		inline void append(char c)
 		{
-			if (ptr >= end)
-				grow(1);
+			reserve_more(1);
 			*ptr++ = c;
 		}
 
@@ -412,22 +411,8 @@ namespace JSON
 			return *this;
 		}
 
-		Writer &val(int v)
-		{
-			reserve_more(22);
-			put_sep_raw();
-			put_int_raw((long long)v);
-			need_sep = true;
-			return *this;
-		}
-		Writer &val(long v)
-		{
-			reserve_more(22);
-			put_sep_raw();
-			put_int_raw((long long)v);
-			need_sep = true;
-			return *this;
-		}
+		// Smaller-integer overloads exist only to block ambiguous resolution
+		// against val(double). They widen and forward to the 64-bit workhorse.
 		Writer &val(long long v)
 		{
 			reserve_more(22);
@@ -436,22 +421,8 @@ namespace JSON
 			need_sep = true;
 			return *this;
 		}
-		Writer &val(unsigned v)
-		{
-			reserve_more(21);
-			put_sep_raw();
-			put_uint_raw((unsigned long long)v);
-			need_sep = true;
-			return *this;
-		}
-		Writer &val(unsigned long v)
-		{
-			reserve_more(21);
-			put_sep_raw();
-			put_uint_raw((unsigned long long)v);
-			need_sep = true;
-			return *this;
-		}
+		Writer &val(int v) { return val((long long)v); }
+		Writer &val(long v) { return val((long long)v); }
 		Writer &val(unsigned long long v)
 		{
 			reserve_more(21);
@@ -460,6 +431,8 @@ namespace JSON
 			need_sep = true;
 			return *this;
 		}
+		Writer &val(unsigned v) { return val((unsigned long long)v); }
+		Writer &val(unsigned long v) { return val((unsigned long long)v); }
 		Writer &val(double v)
 		{
 			// Single range-check catches NaN, ±Inf, and |v| >= 1e18 in one
@@ -545,66 +518,30 @@ namespace JSON
 			return v == sentinel ? val_null() : val(v);
 		}
 
-		Writer &kv(const char *k, int v)
-		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 25); // sep + key + sign + 20 digits
-			put_sep_raw();
-			put_kvkey_raw(k, klen);
-			put_int_raw((long long)v);
-			need_sep = true;
-			return *this;
-		}
-		Writer &kv(const char *k, long v)
-		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 25);
-			put_sep_raw();
-			put_kvkey_raw(k, klen);
-			put_int_raw((long long)v);
-			need_sep = true;
-			return *this;
-		}
 		Writer &kv(const char *k, long long v)
 		{
 			size_t klen = strlen(k);
-			reserve_more(klen + 25);
+			reserve_more(klen + 25); // sep + key + sign + 20 digits
 			put_sep_raw();
 			put_kvkey_raw(k, klen);
 			put_int_raw(v);
 			need_sep = true;
 			return *this;
 		}
-		Writer &kv(const char *k, unsigned v)
-		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 24); // sep + key + 20 digits
-			put_sep_raw();
-			put_kvkey_raw(k, klen);
-			put_uint_raw((unsigned long long)v);
-			need_sep = true;
-			return *this;
-		}
-		Writer &kv(const char *k, unsigned long v)
-		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 24);
-			put_sep_raw();
-			put_kvkey_raw(k, klen);
-			put_uint_raw((unsigned long long)v);
-			need_sep = true;
-			return *this;
-		}
+		Writer &kv(const char *k, int v) { return kv(k, (long long)v); }
+		Writer &kv(const char *k, long v) { return kv(k, (long long)v); }
 		Writer &kv(const char *k, unsigned long long v)
 		{
 			size_t klen = strlen(k);
-			reserve_more(klen + 24);
+			reserve_more(klen + 24); // sep + key + 20 digits
 			put_sep_raw();
 			put_kvkey_raw(k, klen);
 			put_uint_raw(v);
 			need_sep = true;
 			return *this;
 		}
+		Writer &kv(const char *k, unsigned v) { return kv(k, (unsigned long long)v); }
+		Writer &kv(const char *k, unsigned long v) { return kv(k, (unsigned long long)v); }
 		Writer &kv(const char *k, double v)
 		{
 			size_t klen = strlen(k);
@@ -758,12 +695,6 @@ namespace JSON
 	private:
 		int dict = 0;
 		bool stringify_enhanced = false;
-
-		// All three helpers below rely on Writer's internal need_sep flag
-		// for comma placement — no manual ',' bookkeeping. Each entry point
-		// assumes need_sep reflects the surrounding JSON context: beginArray /
-		// beginObject / key() will emit a leading comma iff one is due, and
-		// the primitive val() / kv() calls leave need_sep=true on exit.
 
 		void write_value(const Value &v, Writer &w)
 		{
