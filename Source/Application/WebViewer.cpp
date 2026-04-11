@@ -125,6 +125,7 @@ void PluginManager::addPlugin(const std::string &arg)
 				author = p.Get().getString();
 				break;
 			case AIS::KEY_SETTING_DESCRIPTION:
+			case AIS::KEY_SETTING_DESC:
 				description = p.Get().getString();
 				break;
 			default:

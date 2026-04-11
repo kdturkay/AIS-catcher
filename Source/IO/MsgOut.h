@@ -143,6 +143,7 @@ namespace IO
 					builder.setMap(JSON_DICT_SPARSE);
 				return true;
 			case AIS::KEY_SETTING_DESCRIPTION:
+			case AIS::KEY_SETTING_DESC:
 				description = arg;
 				return true;
 			case AIS::KEY_SETTING_ZONE:
