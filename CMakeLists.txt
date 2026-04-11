@@ -93,7 +93,7 @@ option(MSVC_VCPKG "For MSVC use VCPKG libraries." OFF)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(OPTIMIZATION_FLAGS "-Ofast")
     add_compile_options("-Wall")
     add_compile_options("-Wno-psabi")

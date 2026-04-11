@@ -991,7 +991,7 @@ namespace AIS
 
 	void NMEA::scanLine(TAG &tag)
 	{
-		int limit = std::min(bufsize, pos + (int)(1025 - line.size()));
+		int limit = MIN(bufsize, pos + (int)(1025 - line.size()));
 		int start = pos;
 
 		while (pos < limit)
@@ -1029,7 +1029,7 @@ namespace AIS
 
 	void NMEA::scanJSON(TAG &tag)
 	{
-		int limit = std::min(bufsize, pos + (int)(1025 - line.size()));
+		int limit = MIN(bufsize, pos + (int)(1025 - line.size()));
 		int start = pos;
 
 		SWAR_SKIP(buf, pos, limit, C('{') || C('}') || C('\r') || C('\n') || C('\t') || C('\0'))
@@ -1078,7 +1078,7 @@ namespace AIS
 
 	void NMEA::scanBinary(TAG &tag)
 	{
-		int limit = std::min(bufsize, pos + (int)(1025 - line.size()));
+		int limit = MIN(bufsize, pos + (int)(1025 - line.size()));
 		int start = pos;
 
 		SWAR_SKIP(buf, pos, limit, C('\n'))
