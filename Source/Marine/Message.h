@@ -81,7 +81,7 @@ namespace AIS
 			rxtime = us.count();
 		}
 
-		int getNMEAJSON(std::string &out, unsigned mode, float level, float ppm, int status, const std::string &hardware, int version, Type driver, bool include_ss = false, uint32_t ipv4 = 0, const std::string &uid = "", const char *suffix = nullptr) const;
+		int getNMEAJSON(std::string &out, const TAG &tag, bool include_ss = false, const std::string &uid = "", const char *suffix = nullptr) const;
 		int getNMEATagBlock(std::string &out, const char *suffix = nullptr) const;
 		int getBinaryNMEA(std::string &out, const TAG &tag, bool crc = false, const char *suffix = nullptr) const;
 

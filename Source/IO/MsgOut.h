@@ -70,10 +70,10 @@ namespace IO
 				if (lines_sent > 0 && lines_sent % 100 != 0)
 					msg.getBinaryNMEA(json, tag);
 				else
-					msg.getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, sample_start, tag.ipv4, uuid, suffix);
+					msg.getNMEAJSON(json, tag, sample_start, uuid, suffix);
 				break;
 			default:
-				msg.getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, sample_start, tag.ipv4, uuid, suffix);
+				msg.getNMEAJSON(json, tag, sample_start, uuid, suffix);
 				break;
 			}
 			lines_sent++;

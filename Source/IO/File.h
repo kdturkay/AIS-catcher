@@ -100,7 +100,7 @@ namespace IO
 						continue;
 
 					json.clear();
-					data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, false, tag.ipv4, "", "\n");
+					data[i].getNMEAJSON(json, tag, false, "", "\n");
 					file.write(json.data(), json.size());
 				}
 			}

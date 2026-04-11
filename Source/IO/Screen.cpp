@@ -90,7 +90,7 @@ namespace IO
 				case MessageFormat::JSON_NMEA:
 				{
 					json.clear();
-					data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, 0, "", "\n");
+					data[i].getNMEAJSON(json, tag, include_sample_start, "", "\n");
 					std::cout.write(json.data(), json.size());
 				}
 				break;

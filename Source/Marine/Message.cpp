@@ -78,16 +78,16 @@ namespace AIS
 			return json;
 	}
 
-	int Message::getNMEAJSON(std::string &out, unsigned mode, float level, float ppm, int status, const std::string &hardware, int version, Type driver, bool include_ssl, uint32_t ipv4, const std::string &uuid, const char *suffix) const
+	int Message::getNMEAJSON(std::string &out, const TAG &tag, bool include_ssl, const std::string &uuid, const char *suffix) const
 	{
 		JSON::Writer w(out);
 
 		w.append_lit("{\"class\":\"AIS\",\"device\":\"AIS-catcher\",\"version\":");
-		w.append_int(version);
+		w.append_int(tag.version);
 		w.append_lit(",\"driver\":");
-		w.append_int((int)driver);
+		w.append_int((int)tag.driver);
 		w.append_lit(",\"hardware\":\"");
-		w.append(hardware.data(), hardware.size());
+		w.append(tag.hardware.data(), tag.hardware.size());
 		w.append_lit("\",\"channel\":\"");
 		w.append(getChannel());
 		w.append_lit("\",\"repeat\":");
@@ -101,13 +101,13 @@ namespace AIS
 			w.append_int((long long)(end_idx - start_idx));
 		}
 
-		if (status)
+		if (tag.status)
 		{
 			w.append_lit(",\"msg_status\":");
-			w.append_int((long long)status);
+			w.append_int((long long)tag.status);
 		}
 
-		if (mode & 2)
+		if (tag.mode & 2)
 		{
 			w.append_lit(",\"rxuxtime\":");
 			if ((rxtime % 1000000) != 0)
@@ -132,24 +132,24 @@ namespace AIS
 			w.append('"');
 		}
 
-		if (ipv4)
+		if (tag.ipv4)
 		{
 			w.append_lit(",\"ipv4\":");
-			w.append_int((long long)ipv4);
+			w.append_int((long long)tag.ipv4);
 		}
 
-		if (mode & 1)
+		if (tag.mode & 1)
 		{
 			w.append_lit(",\"signalpower\":");
-			if (level == LEVEL_UNDEFINED)
+			if (tag.level == LEVEL_UNDEFINED)
 				w.append_lit("null");
 			else
-				w.append_float(level);
+				w.append_float(tag.level);
 			w.append_lit(",\"ppm\":");
-			if (ppm == PPM_UNDEFINED)
+			if (tag.ppm == PPM_UNDEFINED)
 				w.append_lit("null");
 			else
-				w.append_float(ppm);
+				w.append_float(tag.ppm);
 		}
 
 		if (getStation())
