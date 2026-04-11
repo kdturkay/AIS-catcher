@@ -367,8 +367,7 @@ jobs:
 
         echo "AIRSPY"
         git clone https://github.com/airspy/airspyone_host.git
-        git reset --hard b97309a6a24db161de990d6e4f0432fc94f72cd9
-        cd airspyone_host; mkdir build; cd build
+        cd airspyone_host; git reset --hard b97309a6a24db161de990d6e4f0432fc94f72cd9; mkdir build; cd build
         cmake .. -A $msplatform -G $gen -DLIBUSB_LIBRARIES="$libusb_lib" -DLIBUSB_INCLUDE_DIR="$libusb_inc" -DTHREADS_PTHREADS_WIN32_LIBRARY="$pthread_lib" -DTHREADS_PTHREADS_INCLUDE_DIR="$pthread_inc"
         msbuild /verbosity:quiet /m /p:Configuration=$config /p:Platform=$msplatform airspy_all.sln
         cd ..; cd .. 
@@ -379,8 +378,7 @@ jobs:
 
         echo "HACK RF"
         git clone https://github.com/greatscottgadgets/hackrf.git
-        git reset --hard 34cbbe7330d1e11e7967f84da39d04a61bfdf4f1
-        cd hackrf; cd host; mkdir build; cd build
+        cd hackrf; git reset --hard 34cbbe7330d1e11e7967f84da39d04a61bfdf4f1; cd host; mkdir build; cd build
         cmake .. -A $msplatform -G $gen -DLIBUSB_LIBRARIES="$libusb_lib" -DLIBUSB_INCLUDE_DIR="$libusb_inc" -DTHREADS_PTHREADS_WIN32_LIBRARY="$pthread_lib" -DTHREADS_PTHREADS_INCLUDE_DIR="$pthread_inc" -DFFTW_LIBRARIES="$fftw3_lib" -DFFTW_INCLUDES="$fftw3_inc"
         msbuild /verbosity:quiet /m /p:Configuration=$config /p:Platform=$msplatform HackRF.sln
         cd ..; cd ..; cd ..
