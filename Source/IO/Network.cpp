@@ -89,11 +89,11 @@ namespace IO
 				}
 				else
 				{
-					json.clear();
-					builder.stringify(data[i], json);
+					std::string s;
+					builder.stringify(data[i], s);
 					{
 						const std::lock_guard<std::mutex> lock(msg_list_mutex);
-						msg_list.push_back(json);
+						msg_list.push_back(std::move(s));
 					}
 				}
 			}
@@ -120,56 +120,65 @@ namespace IO
 			send_list.splice(send_list.begin(), msg_list);
 		}
 
-		oss.str("");
+		post_body.clear();
 		int r;
 
 		if (protocol == PROTOCOL::AISCATCHER || protocol == PROTOCOL::AIRFRAMES)
 		{
 			const std::string now = Util::Convert::toTimeStr(std::time(0));
 
-			oss << "{\"protocol\":\"" << protocol_string << "\"," << "\"encodetime\":\"" << now << "\"," << "\"stationid\":" << stationid << "," << "\"station_lat\":" << lat << ","
-				<< "\"station_lon\":" << lon << "," << "\"receiver\":{\"description\":\"AIS-catcher " VERSION "\"," << "\"version\":" << VERSION_NUMBER << ",\"engine\":" << model
-				<< ",\"setting\":" << model_setting << "},\"device\":{\"product\":" << product << ",\"vendor\":" << vendor << ",\"serial\":" << serial << ",\"setting\":" << device_setting << "},\"msgs\":[";
-
-			char delim = ' ';
+			JSON::Writer w(post_body);
+			w.beginObject()
+				.kv("protocol", protocol_string)
+				.kv("encodetime", now)
+				.kv_raw("stationid", stationid)
+				.kv_raw("station_lat", lat)
+				.kv_raw("station_lon", lon)
+				.key("receiver")
+				.beginObject()
+				.kv("description", "AIS-catcher " VERSION)
+				.kv("version", VERSION_NUMBER)
+				.kv_raw("engine", model)
+				.kv_raw("setting", model_setting)
+				.endObject()
+				.key("device")
+				.beginObject()
+				.kv_raw("product", product)
+				.kv_raw("vendor", vendor)
+				.kv_raw("serial", serial)
+				.kv_raw("setting", device_setting)
+				.endObject()
+				.key("msgs")
+				.beginArray();
 			for (const auto &m : send_list)
-			{
-				oss << delim << "\n"
-					<< m;
-				delim = ',';
-			}
+				w.raw_val(m);
+			w.endArray().endObject().finish();
 
-			oss << "\n]}\n";
-
-			r = http.Post(oss.str(), gzip, false, "");
+			r = http.Post(post_body, gzip, false, "");
 		}
 		else if (PROTOCOL::APRS == protocol)
 		{
 			const std::string now = Util::Convert::toTimeStr(std::time(0));
 
-			oss << "{\"protocol\":\"jsonais\"," << "\"encodetime\":\"" << now << "\"," << "\"groups\":[{\"path\":[{\"name\":" << stationid << ",\"url\":" << url_json << "}],\"msgs\":[";
-
-			char delim = ' ';
+			JSON::Writer w(post_body);
+			w.beginObject().kv("protocol", "jsonais").kv("encodetime", now).key("groups").beginArray().beginObject().key("path").beginArray().beginObject().kv_raw("name", stationid).kv_raw("url", url_json).endObject().endArray().key("msgs").beginArray();
 
 			for (const auto &m : send_list)
-			{
-				oss << delim << "\n"
-					<< m;
-				delim = ',';
-			}
+				w.raw_val(m);
 
-			oss << "\n]}]}";
+			w.endArray().endObject().endArray().endObject().finish();
 
-			r = http.Post(oss.str(), gzip, true, "jsonais");
+			r = http.Post(post_body, gzip, true, "jsonais");
 		}
 		else
 		{
 			for (const auto &m : send_list)
 			{
-				oss << m << "\n";
+				post_body += m;
+				post_body += '\n';
 			}
 
-			r = http.Post(oss.str(), gzip, false, "");
+			r = http.Post(post_body, gzip, false, "");
 		}
 
 		if (r < 200 || r > 299)
@@ -195,92 +204,79 @@ namespace IO
 		}
 	}
 
-	Setting &HTTPStreamer::Set(std::string option, std::string arg)
+	Setting &HTTPStreamer::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "URL")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_URL:
 			url = arg;
-			url_json = JSON::StringBuilder::stringify(arg);
+			url_json = JSON::stringify(arg);
 			http.setURL(url);
-		}
-		else if (option == "USERPWD")
-		{
+			break;
+		case AIS::KEY_SETTING_USERPWD:
 			http.setUserPwd(arg);
 			userpwd = arg;
-		}
-		else if (option == "STATIONID" || option == "ID" || option == "CALLSIGN")
-		{
-			stationid = JSON::StringBuilder::stringify(arg);
-		}
-		else if (option == "INTERVAL")
-		{
-			INTERVAL = Util::Parse::Integer(arg, 1, 60 * 60 * 24, option);
-		}
-		else if (option == "TIMEOUT")
-		{
-			TIMEOUT = Util::Parse::Integer(arg, 1, 30, option);
-		}
-		else if (option == "MODEL")
-		{
-			model = JSON::StringBuilder::stringify(arg);
-		}
-		else if (option == "MODEL_SETTING")
-		{
-			model_setting = JSON::StringBuilder::stringify(arg);
-		}
-		else if (option == "PRODUCT")
-		{
-			product = JSON::StringBuilder::stringify(arg);
-		}
-		else if (option == "VENDOR")
-		{
-			vendor = JSON::StringBuilder::stringify(arg);
-		}
-		else if (option == "SERIAL")
-		{
-			serial = JSON::StringBuilder::stringify(arg);
-		}
-		else if (option == "LAT")
-		{
+			break;
+		case AIS::KEY_SETTING_ID:
+		case AIS::KEY_SETTING_CALLSIGN:
+		case AIS::KEY_SETTING_STATIONID:
+			stationid = JSON::stringify(arg);
+			break;
+		case AIS::KEY_SETTING_INTERVAL:
+			INTERVAL = Util::Parse::Integer(arg, 1, 60 * 60 * 24);
+			break;
+		case AIS::KEY_SETTING_TIMEOUT:
+			TIMEOUT = Util::Parse::Integer(arg, 1, 30);
+			break;
+		case AIS::KEY_SETTING_MODEL:
+			model = JSON::stringify(arg);
+			break;
+		case AIS::KEY_SETTING_MODEL_SETTING:
+			model_setting = JSON::stringify(arg);
+			break;
+		case AIS::KEY_SETTING_PRODUCT:
+			product = JSON::stringify(arg);
+			break;
+		case AIS::KEY_SETTING_VENDOR:
+			vendor = JSON::stringify(arg);
+			break;
+		case AIS::KEY_SETTING_SERIAL:
+			serial = JSON::stringify(arg);
+			break;
+		case AIS::KEY_SETTING_LAT:
 			lat = std::to_string(Util::Parse::Float(arg));
-		}
-		else if (option == "LON")
-		{
+			break;
+		case AIS::KEY_SETTING_LON:
 			lon = std::to_string(Util::Parse::Float(arg));
-		}
-		else if (option == "DEVICE_SETTING")
-		{
-			device_setting = JSON::StringBuilder::stringify(arg);
-		}
-		else if (option == "GZIP")
-		{
+			break;
+		case AIS::KEY_SETTING_DEVICE_SETTING:
+			device_setting = JSON::stringify(arg);
+			break;
+		case AIS::KEY_SETTING_GZIP:
 			gzip = Util::Parse::Switch(arg);
 			if (gzip && !zip.installed())
 				throw std::runtime_error("HTTP: ZLIB not installed");
-		}
-		else if (option == "RESPONSE")
-		{
+			break;
+		case AIS::KEY_SETTING_RESPONSE:
 			show_response = Util::Parse::Switch(arg);
-		}
-		else if (option == "PROTOCOL")
+			break;
+		case AIS::KEY_SETTING_PROTOCOL:
 		{
-			Util::Convert::toUpper(arg);
+			std::string a = arg;
+			Util::Convert::toUpper(a);
 
-			if (arg == "AISCATCHER")
+			if (a == "AISCATCHER")
 			{
-				builder.setMap(JSON_DICT_FULL);
 				protocol_string = "jsonaiscatcher";
 				protocol = PROTOCOL::AISCATCHER;
 			}
-			else if (arg == "MINIMAL")
+			else if (a == "MINIMAL")
 			{
 				builder.setMap(JSON_DICT_MINIMAL);
 				protocol_string = "jsonaiscatcher";
 				protocol = PROTOCOL::AISCATCHER;
 			}
-			else if (arg == "AIRFRAMES")
+			else if (a == "AIRFRAMES")
 			{
 				builder.setMap(JSON_DICT_MINIMAL);
 				protocol_string = "airframes";
@@ -288,28 +284,28 @@ namespace IO
 				gzip = zip.installed();
 				INTERVAL = 30;
 			}
-			else if (arg == "LIST")
+			else if (a == "LIST")
 			{
-				builder.setMap(JSON_DICT_FULL);
 				protocol = PROTOCOL::LIST;
 			}
-			else if (arg == "NMEA")
+			else if (a == "NMEA")
 			{
 				protocol = PROTOCOL::NMEA;
 			}
-			else if (arg == "APRS")
+			else if (a == "APRS")
 			{
 				builder.setMap(JSON_DICT_APRS);
 				protocol = PROTOCOL::APRS;
 			}
 			else
 				throw std::runtime_error("HTTP: error - unknown protocol");
+			break;
 		}
-		else if (!setOption(option, arg) && !filter.SetOption(option, arg))
-		{
-			throw std::runtime_error("HTTP output - unknown option: " + option);
+		default:
+			if (!setOptionKey(key, arg))
+				throw std::runtime_error(std::string("HTTP output - unknown option: ") + AIS::KeyMap[key][JSON_DICT_SETTING] + " " + arg);
+			break;
 		}
-
 		return *this;
 	}
 
@@ -369,44 +365,13 @@ namespace IO
 		if (sock == -1)
 			return;
 
-		if (fmt == MessageFormat::NMEA)
+		for (int i = 0; i < len; i++)
 		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
+			if (!filter.include(data[i]))
+				continue;
 
-				for (const auto &s : data[i].NMEA)
-					SendTo((s + "\r\n").c_str());
-			}
-		}
-		else if (fmt == MessageFormat::NMEA_TAG)
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
-
-				SendTo(data[i].getNMEATagBlock());
-			}
-		}
-		else if (fmt == MessageFormat::BINARY_NMEA)
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
-
-				SendTo(data[i].getBinaryNMEA(tag));
-			}
-		}
-		else
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (filter.include(data[i]))
-					SendTo((data[i].getNMEAJSON(tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, uuid) + "\r\n").c_str());
-			}
+			formatInto(data[i], tag, include_sample_start, uuid, "\r\n");
+			SendTo(json.data(), (int)json.size());
 		}
 	}
 
@@ -423,8 +388,8 @@ namespace IO
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
 				json.clear();
-				builder.stringify(data[i], json);
-				SendTo((json + "\r\n").c_str());
+				builder.stringify(data[i], json, "\r\n");
+				SendTo(json.data(), (int)json.size());
 			}
 		}
 	}
@@ -520,42 +485,36 @@ namespace IO
 		}
 	}
 
-	Setting &UDPStreamer::Set(std::string option, std::string arg)
+	Setting &UDPStreamer::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "HOST")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_HOST:
 			host = arg;
-		}
-		else if (option == "PORT")
-		{
+			break;
+		case AIS::KEY_SETTING_PORT:
 			port = arg;
-		}
-		else if (option == "BROADCAST")
-		{
+			break;
+		case AIS::KEY_SETTING_BROADCAST:
 			broadcast = Util::Parse::Switch(arg);
-		}
-		else if (option == "RESET")
-		{
-			reset = Util::Parse::Integer(arg, 1, 24 * 60, option);
-		}
-		else if (option == "UUID")
-		{
+			break;
+		case AIS::KEY_SETTING_RESET:
+			reset = Util::Parse::Integer(arg, 1, 24 * 60);
+			break;
+		case AIS::KEY_SETTING_UUID:
 			if (Util::Helper::isUUID(arg))
 				uuid = arg;
 			else
 				throw std::runtime_error("UDP: invalid UUID: " + arg);
-		}
-		else if (option == "INCLUDE_SAMPLE_START")
-		{
+			break;
+		case AIS::KEY_SETTING_INCLUDE_SAMPLE_START:
 			include_sample_start = Util::Parse::Switch(arg);
+			break;
+		default:
+			if (!setOptionKey(key, arg))
+				throw std::runtime_error(std::string("UDP output - unknown option: ") + AIS::KeyMap[key][JSON_DICT_SETTING] + " " + arg);
+			break;
 		}
-		else if (!OutputMessage::setOption(option, arg))
-		{
-			throw std::runtime_error("UDP output - unknown option: " + option);
-		}
-
 		return *this;
 	}
 
@@ -602,76 +561,17 @@ namespace IO
 
 	void TCPClientStreamer::Receive(const AIS::Message *data, int len, TAG &tag)
 	{
-		if (fmt == MessageFormat::NMEA)
+		for (int i = 0; i < len; i++)
 		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
+			if (!filter.include(data[i]))
+				continue;
 
-				for (const auto &s : data[i].NMEA)
-				{
-					if (SendTo((s + "\r\n").c_str()) < 0)
-					{
-						if (!persistent)
-						{
-							Error() << "TCP feed: requesting termination.";
-							StopRequest();
-						}
-					}
-				}
-			}
-		}
-		else if (fmt == MessageFormat::NMEA_TAG)
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
+			formatInto(data[i], tag, include_sample_start, uuid, "\r\n");
 
-				if (SendTo(data[i].getNMEATagBlock()) < 0)
-				{
-					if (!persistent)
-					{
-						Error() << "TCP feed: requesting termination.";
-						StopRequest();
-					}
-				}
-			}
-		}
-		else if ((fmt == MessageFormat::COMMUNITY_HUB && !isFirstDataSend() && lines_sent % 100 != 0) || fmt == MessageFormat::BINARY_NMEA)
-		{
-			for (int i = 0; i < len; i++)
+			if (SendTo(json.data(), (int)json.size()) < 0 && !persistent)
 			{
-				if (!filter.include(data[i]))
-					continue;
-
-				std::string binary_packet = data[i].getBinaryNMEA(tag);
-				if (SendTo(binary_packet) < 0)
-				{
-					if (!persistent)
-					{
-						Error() << "TCP feed: requesting termination.";
-						StopRequest();
-					}
-				}
-			}
-		}
-		else
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
-
-				if (SendTo((data[i].getNMEAJSON(tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4, uuid) + "\r\n").c_str()) < 0)
-				{
-					if (!persistent)
-					{
-						Error() << "TCP feed: requesting termination.";
-						StopRequest();
-					}
-				}
+				Error() << "TCP feed: requesting termination.";
+				StopRequest();
 			}
 		}
 	}
@@ -684,8 +584,8 @@ namespace IO
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
 				json.clear();
-				builder.stringify(data[i], json);
-				if (SendTo((json + "\r\n").c_str()) < 0)
+				builder.stringify(data[i], json, "\r\n");
+				if (SendTo(json.data(), (int)json.size()) < 0)
 					if (!persistent)
 					{
 						Critical() << "TCP feed: requesting termination.";
@@ -714,11 +614,11 @@ namespace IO
 
 		// Set up TCP connection
 		tcp.setStats(&stats);
-		tcp.setValue("HOST", host);
-		tcp.setValue("PORT", port);
-		tcp.setValue("PERSISTENT", Util::Convert::toString(persistent));
-		tcp.setValue("TIMEOUT", "0");
-		tcp.setValue("KEEP_ALIVE", Util::Convert::toString(keep_alive));
+		tcp.setOptionKey(AIS::KEY_SETTING_HOST, host);
+		tcp.setOptionKey(AIS::KEY_SETTING_PORT, port);
+		tcp.setOptionKey(AIS::KEY_SETTING_PERSIST, Util::Convert::toString(persistent));
+		tcp.setOptionKey(AIS::KEY_SETTING_TIMEOUT, "0");
+		tcp.setOptionKey(AIS::KEY_SETTING_KEEP_ALIVE, Util::Convert::toString(keep_alive));
 
 		connection = &tcp;
 
@@ -744,40 +644,35 @@ namespace IO
 			connection->disconnect();
 	}
 
-	Setting &TCPClientStreamer::Set(std::string option, std::string arg)
+	Setting &TCPClientStreamer::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "HOST")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_HOST:
 			host = arg;
-		}
-		else if (option == "PORT")
-		{
+			break;
+		case AIS::KEY_SETTING_PORT:
 			port = arg;
-		}
-		else if (option == "KEEP_ALIVE")
-		{
+			break;
+		case AIS::KEY_SETTING_KEEP_ALIVE:
 			keep_alive = Util::Parse::Switch(arg);
-		}
-		else if (option == "PERSIST")
-		{
+			break;
+		case AIS::KEY_SETTING_PERSIST:
 			persistent = Util::Parse::Switch(arg);
-		}
-		else if (option == "UUID")
-		{
+			break;
+		case AIS::KEY_SETTING_UUID:
 			if (Util::Helper::isUUID(arg))
 				uuid = arg;
 			else
 				throw std::runtime_error("TCP client: invalid UUID: " + arg);
-		}
-		else if (option == "INCLUDE_SAMPLE_START")
-		{
+			break;
+		case AIS::KEY_SETTING_INCLUDE_SAMPLE_START:
 			include_sample_start = Util::Parse::Switch(arg);
-		}
-		else if (!OutputMessage::setOption(option, arg))
-		{
-			throw std::runtime_error("TCP client - unknown option: " + option);
+			break;
+		default:
+			if (!setOptionKey(key, arg))
+				throw std::runtime_error(std::string("TCP client - unknown option: ") + AIS::KeyMap[key][JSON_DICT_SETTING] + " " + arg);
+			break;
 		}
 		return *this;
 	}
@@ -801,27 +696,24 @@ namespace IO
 		}
 	}
 
-	Setting &TCPlistenerStreamer::Set(std::string option, std::string arg)
+	Setting &TCPlistenerStreamer::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "PORT")
+		switch (key)
 		{
-			port = Util::Parse::Integer(arg, 0, 0xFFFF, option);
-		}
-		else if (option == "TIMEOUT")
-		{
+		case AIS::KEY_SETTING_PORT:
+			port = Util::Parse::Integer(arg, 0, 0xFFFF);
+			break;
+		case AIS::KEY_SETTING_TIMEOUT:
 			timeout = Util::Parse::Integer(arg);
-		}
-		else if (option == "INCLUDE_SAMPLE_START")
-		{
+			break;
+		case AIS::KEY_SETTING_INCLUDE_SAMPLE_START:
 			include_sample_start = Util::Parse::Switch(arg);
+			break;
+		default:
+			if (!setOptionKey(key, arg))
+				throw std::runtime_error(std::string("TCP listener - unknown option: ") + AIS::KeyMap[key][JSON_DICT_SETTING] + " " + arg);
+			break;
 		}
-		else if (!OutputMessage::setOption(option, arg))
-		{
-			throw std::runtime_error("TCP listener - unknown option: " + option);
-		}
-
 		return *this;
 	}
 
@@ -848,48 +740,13 @@ namespace IO
 
 	void TCPlistenerStreamer::Receive(const AIS::Message *data, int len, TAG &tag)
 	{
-		if (fmt == MessageFormat::NMEA)
+		for (int i = 0; i < len; i++)
 		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
+			if (!filter.include(data[i]))
+				continue;
 
-				for (const auto &s : data[i].NMEA)
-				{
-					SendAllDirect(s + "\r\n");
-				}
-			}
-		}
-		else if (fmt == MessageFormat::NMEA_TAG)
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
-
-				SendAllDirect(data[i].getNMEATagBlock());
-			}
-		}
-		else if (fmt == MessageFormat::BINARY_NMEA)
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
-
-				SendAllDirect(data[i].getBinaryNMEA(tag));
-			}
-		}
-		else
-		{
-			for (int i = 0; i < len; i++)
-			{
-				if (!filter.include(data[i]))
-					continue;
-
-				SendAllDirect((data[i].getNMEAJSON(tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, tag.ipv4) + "\r\n").c_str());
-			}
+			formatInto(data[i], tag, include_sample_start, "", "\r\n");
+			SendAllDirect(json.data(), (int)json.size());
 		}
 	}
 
@@ -900,8 +757,8 @@ namespace IO
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
 				json.clear();
-				builder.stringify(data[i], json);
-				SendAllDirect((json + "\r\n").c_str());
+				builder.stringify(data[i], json, "\r\n");
+				SendAllDirect(json.data(), (int)json.size());
 			}
 		}
 	}
@@ -919,7 +776,7 @@ namespace IO
 		std::string filter_str = filter.Get();
 		if (!filter_str.empty())
 			ss << ", " << filter_str;
-		tcp.setValue("PERSISTENT", "on");
+		tcp.setOptionKey(AIS::KEY_SETTING_PERSIST, "on");
 		tcp.setStats(&stats);
 		tls.setStats(&stats);
 
@@ -944,8 +801,8 @@ namespace IO
 			session = tcp.add(&ws);
 			session = ws.add(&mqtt);
 
-			ws.setValue("PROTOCOLS", "mqtt");
-			ws.setValue("BINARY", "on");
+			ws.setOptionKey(AIS::KEY_SETTING_PROTOCOLS, "mqtt");
+			ws.setOptionKey(AIS::KEY_SETTING_BINARY, "on");
 			break;
 		case PROTOCOL::WSSMQTT:
 
@@ -953,8 +810,8 @@ namespace IO
 			session = tls.add(&ws);
 			session = ws.add(&mqtt);
 
-			ws.setValue("PROTOCOLS", "mqtt");
-			ws.setValue("BINARY", "on");
+			ws.setOptionKey(AIS::KEY_SETTING_PROTOCOLS, "mqtt");
+			ws.setOptionKey(AIS::KEY_SETTING_BINARY, "on");
 			break;
 		default:
 			break;
@@ -974,23 +831,8 @@ namespace IO
 			if (!filter.include(data[i]))
 				continue;
 
-			if (fmt == MessageFormat::NMEA)
-			{
-				for (const auto &s : data[i].NMEA)
-				{
-					((Protocol::MQTT *)session)->send((s + "\r\n").c_str(), s.length() + 2, topic_template.get(tag, data[0]));
-				}
-			}
-			else if (fmt == MessageFormat::BINARY_NMEA)
-			{
-				std::string binary = data[i].getBinaryNMEA(tag);
-				((Protocol::MQTT *)session)->send(binary.c_str(), binary.length(), topic_template.get(tag, data[0]));
-			}
-			else
-			{
-				std::string s = data[i].getNMEAJSON(tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, tag.ipv4) + "\n";
-				((Protocol::MQTT *)session)->send(s.c_str(), s.length(), topic_template.get(tag, data[0]));
-			}
+			formatInto(data[i], tag, false, "", "\r\n");
+			((Protocol::MQTT *)session)->send(json.data(), (int)json.size(), topic_template.get(tag, data[0]));
 		}
 
 		session->read(nullptr, 0, 0, false);
@@ -1003,38 +845,39 @@ namespace IO
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
 				json.clear();
-				builder.stringify(data[i], json);
-				json += "\n";
-				((Protocol::MQTT *)session)->send(json.c_str(), json.length(), topic_template.get(tag, *((AIS::Message *)data[0].binary)));
+				builder.stringify(data[i], json, "\r\n");
+				((Protocol::MQTT *)session)->send(json.data(), (int)json.size(), topic_template.get(tag, *((AIS::Message *)data[0].binary)));
 			}
 		}
 
 		session->read(nullptr, 0, 0, false);
 	}
 
-	Setting &MQTTStreamer::Set(std::string option, std::string arg)
+	Setting &MQTTStreamer::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "URL")
+		switch (key)
+		{
+		case AIS::KEY_SETTING_URL:
 		{
 			std::string prot, host, port, path, username, password;
 			Util::Parse::URL(arg, prot, username, password, host, port, path);
 
 			if (!host.empty())
-				Set("HOST", host);
+				SetKey(AIS::KEY_SETTING_HOST, host);
 			if (!port.empty())
-				Set("PORT", port);
+				SetKey(AIS::KEY_SETTING_PORT, port);
 			if (!prot.empty())
-				Set("PROTOCOL", prot);
+				SetKey(AIS::KEY_SETTING_PROTOCOL, prot);
 			if (!username.empty())
-				Set("USERNAME", username);
+				SetKey(AIS::KEY_SETTING_USERNAME, username);
 			if (!password.empty())
-				Set("PASSWORD", password);
+				SetKey(AIS::KEY_SETTING_PASSWORD, password);
+			break;
 		}
-		else if (option == "PROTOCOL")
+		case AIS::KEY_SETTING_PROTOCOL:
 		{
-			if (!Util::Parse().Protocol(arg, Protocol))
+			std::string a = arg;
+			if (!Util::Parse().Protocol(a, Protocol))
 				throw std::runtime_error("TCP output: unknown protocol: " + arg);
 
 			switch (Protocol)
@@ -1052,17 +895,17 @@ namespace IO
 			default:
 				throw std::runtime_error("TCO output: unsupported protocol: " + arg);
 			}
+			break;
 		}
-		else if (option == "TOPIC")
-		{
-			mqtt.setValue("TOPIC", arg);
+		case AIS::KEY_SETTING_TOPIC:
+			mqtt.setOptionKey(AIS::KEY_SETTING_TOPIC, arg);
 			topic_template.set(arg);
+			break;
+		default:
+			if (!tcp.setOptionKey(key, arg) && !mqtt.setOptionKey(key, arg) && !ws.setOptionKey(key, arg) && !setOptionKey(key, arg))
+				throw std::runtime_error(std::string("MQTT output - unknown option: ") + AIS::KeyMap[key][JSON_DICT_SETTING] + " " + arg);
+			break;
 		}
-		else if (!tcp.setValue(option, arg) && !mqtt.setValue(option, arg) && !ws.setValue(option, arg) && !OutputMessage::setOption(option, arg))
-		{
-			throw std::runtime_error("MQTT output - unknown option: " + option);
-		}
-
 		return *this;
 	}
 }

@@ -25,6 +25,7 @@
 #include "JSONAIS.h"
 #include "Convert.h"
 #include "Message.h"
+#include "StringBuilder.h"
 
 // ----------------------------
 // Class to log message count stat
@@ -114,38 +115,50 @@ public:
 		}
 	}
 
-	std::string toJSON(bool empty = false) {
+	void writeJSON(JSON::Writer &w, bool empty = false) {
 		std::lock_guard<std::mutex> l{ this->mtx };
-		static const std::string null_str = "null";
-		static const std::string comma = ",";
-
-		std::string element;
 
 		int c = _count - _exclude;
 		bool has_level = c > 0 && _level_min <= _level_max;
 
-		element += "{\"count\":" + std::to_string(empty ? 0 : _count) +
-				   ",\"vessels\":" + std::to_string(empty ? 0 : _vessels) +
-				   ",\"level_min\":" + ((empty || !has_level) ? null_str : Util::Convert::toString(_level_min)) +
-				   ",\"level_max\":" + ((empty || !has_level) ? null_str : Util::Convert::toString(_level_max)) +
-				   ",\"ppm\":" + (empty || !has_level ? null_str : std::to_string(_ppm / c)) +
-				   ",\"dist\":" + (empty ? null_str : std::to_string(_distance)) +
-				   ",\"channel\":[";
+		w.beginObject();
+		w.kv("count", empty ? 0 : _count);
+		w.kv("vessels", empty ? 0 : _vessels);
+		if (empty || !has_level) {
+			w.kv_null("level_min");
+			w.kv_null("level_max");
+			w.kv_null("ppm");
+		} else {
+			w.kv("level_min", _level_min);
+			w.kv("level_max", _level_max);
+			w.kv("ppm", _ppm / c);
+		}
+		if (empty)
+			w.kv_null("dist");
+		else
+			w.kv("dist", _distance);
 
-		for (int i = 0; i < 4; i++) element += std::to_string(empty ? 0 : _channel[i]) + comma;
-		element.pop_back();
-		element += "],\"radar_a\":[";
-		for (int i = 0; i < _RADAR_BUCKETS; i++) element += std::to_string(empty ? 0 : _radarA[i]) + comma;
-		element.pop_back();
-		element += "],\"radar_b\":[";
-		for (int i = 0; i < _RADAR_BUCKETS; i++) element += std::to_string(empty ? 0 : _radarB[i]) + comma;
-		element.pop_back();
-		element += "],\"msg\":[";
-		for (int i = 0; i < 27; i++) element += std::to_string(empty ? 0 : _msg[i]) + comma;
-		element.pop_back();
-		element += "]}";
-		return element;
+		w.key("channel").beginArray();
+		for (int i = 0; i < 4; i++) w.val(empty ? 0 : _channel[i]);
+		w.endArray();
+
+		w.key("radar_a").beginArray();
+		for (int i = 0; i < _RADAR_BUCKETS; i++) w.val(empty ? 0.0f : _radarA[i]);
+		w.endArray();
+
+		w.key("radar_b").beginArray();
+		for (int i = 0; i < _RADAR_BUCKETS; i++) w.val(empty ? 0.0f : _radarB[i]);
+		w.endArray();
+
+		w.key("msg").beginArray();
+		for (int i = 0; i < 27; i++) w.val(empty ? 0 : _msg[i]);
+		w.endArray();
+
+		w.endObject();
 	}
+
+#define W(x) file.write((const char*)&(x), sizeof(x))
+#define R(x) file.read((char*)&(x), sizeof(x))
 
 	bool Save(std::ofstream& file) {
 		std::lock_guard<std::mutex> l{ this->mtx };
@@ -153,49 +166,27 @@ public:
 		int magic = _MAGIC;
 		int version = _VERSION;
 
-		if (!file.write((const char*)&magic, sizeof(int))) return false;			 // Check magic number
-		if (!file.write((const char*)&version, sizeof(int))) return false;			 // Check version number
-		if (!file.write((const char*)&_count, sizeof(int))) return false;			 // Check count
-		if (!file.write((const char*)&_vessels, sizeof(int))) return false;			 // Check count
-		if (!file.write((const char*)&_msg, sizeof(_msg))) return false;			 // Check msg array
-		if (!file.write((const char*)&_channel, sizeof(_channel))) return false;	 // Check channel array
-		if (!file.write((const char*)&_level_min, sizeof(_level_min))) return false; // Check level
-		if (!file.write((const char*)&_level_max, sizeof(_level_max))) return false; // Check level
-		if (!file.write((const char*)&_ppm, sizeof(_ppm))) return false;			 // Check ppm
-		if (!file.write((const char*)&_distance, sizeof(_distance))) return false;	 // Check distance
-		if (!file.write((const char*)&_radarA, sizeof(_radarA))) return false;		 // Check radar array
-		if (!file.write((const char*)&_radarB, sizeof(_radarB))) return false;		 // Check radar array
-
-		return true;
+		return (bool)(W(magic) && W(version) && W(_count) && W(_vessels)
+			&& W(_msg) && W(_channel)
+			&& W(_level_min) && W(_level_max) && W(_ppm) && W(_distance)
+			&& W(_radarA) && W(_radarB));
 	}
 
 	bool Load(std::ifstream& file) {
 		std::lock_guard<std::mutex> l{ this->mtx };
 
 		int magic = 0, version = 0;
-		if (!file.read((char*)&magic, sizeof(int))) return false;	// Check count
-		if (!file.read((char*)&version, sizeof(int))) return false; // Check count
-		if (!file.read((char*)&_count, sizeof(int))) return false;	// Check count
-		if (version == _VERSION) {
-			if (!file.read((char*)&_vessels, sizeof(int))) return false; // Check count
-		}
-		if (!file.read((char*)&_msg, sizeof(_msg))) return false;			  // Check msg array
-		if (!file.read((char*)&_channel, sizeof(_channel))) return false;	  // Check channel array
-		if (!file.read((char*)&_level_min, sizeof(_level_min))) return false; // Check level
-		if (!file.read((char*)&_level_max, sizeof(_level_max))) return false; // Check level
-		if (!file.read((char*)&_ppm, sizeof(_ppm))) return false;			  // Check ppm
-		if (!file.read((char*)&_distance, sizeof(_distance))) return false;	  // Check distance
-		if (!file.read((char*)&_radarA, sizeof(_radarA))) return false;		  // Check radar array
-		if (!file.read((char*)&_radarB, sizeof(_radarB))) return false;		  // Check radar array
+		bool ok = R(magic) && R(version) && R(_count)
+			&& (version != _VERSION || R(_vessels))
+			&& R(_msg) && R(_channel)
+			&& R(_level_min) && R(_level_max) && R(_ppm) && R(_distance)
+			&& R(_radarA) && R(_radarB);
 
-		if (false && !file.eof()) {
-			Warning() << "Statistics: error with incorrect file size.";
-			return false;
-		}
-		if (magic != _MAGIC || (version != _VERSION && version != 1)) return false;
-
-		return true;
+		return ok && magic == _MAGIC && (version == _VERSION || version == 1);
 	}
+
+#undef W
+#undef R
 };
 
 class Counter : public StreamIn<JSON::JSON> {
@@ -210,7 +201,7 @@ public:
 
 	void Receive(const JSON::JSON* msg, int len, TAG& tag) { stat.Add(*((AIS::Message*)msg[0].binary), tag); }
 
-	std::string toJSON(bool empty = false) { return stat.toJSON(empty); }
+	void writeJSON(JSON::Writer &w, bool empty = false) { stat.writeJSON(w, empty); }
 };
 
 struct ByteCounter : public StreamIn<RAW> {
@@ -219,5 +210,5 @@ struct ByteCounter : public StreamIn<RAW> {
 	uint64_t received = 0;
 	void Receive(const RAW* data, int len, TAG& tag) { received += data[0].size; }
 	void Reset() { received = 0; }
-	void setFilterOption(std::string &arg, std::string &opt) { filter.SetOption(arg, opt); }
+	void setFilter(const AIS::Filter &f) { filter = f; }
 };

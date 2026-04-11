@@ -55,16 +55,13 @@ namespace IO
 	class HTTPStreamer : public OutputMessage
 	{
 
-		JSON::StringBuilder builder;
 		HTTPClient http;
 
-		std::string json;
-
+		std::string post_body;
 		std::thread run_thread;
 		bool terminate = false, running = false;
 
 		ZIP zip;
-		std::ostringstream oss;
 
 		std::string url, url_json, userpwd;
 		bool gzip = false, show_response = true;
@@ -89,20 +86,20 @@ namespace IO
 		void post();
 		void process();
 
-		void Receive(const JSON::JSON *data, int len, TAG &tag);
-		void Receive(const AIS::GPS *data, int len, TAG &tag);
+		void Receive(const JSON::JSON *data, int len, TAG &tag) override;
+		void Receive(const AIS::GPS *data, int len, TAG &tag) override;
 
 		std::list<std::string> msg_list;
 		std::mutex msg_list_mutex;
 
 	public:
 		~HTTPStreamer() { Stop(); }
-		HTTPStreamer() : OutputMessage("HTTP"), builder(&AIS::KeyMap, JSON_DICT_FULL), url("http://127.0.0.1"), userpwd("") { fmt = MessageFormat::JSON_FULL; }
+		HTTPStreamer() : OutputMessage("HTTP"), url("http://127.0.0.1"), userpwd("") { fmt = MessageFormat::JSON_FULL; }
 
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg) override;
 
-		void Start();
-		void Stop();
+		void Start() override;
+		void Stop() override;
 	};
 
 	class UDPEndPoint
@@ -116,10 +113,9 @@ namespace IO
 		friend class UDPStreamer;
 		friend class TCPClientStreamer;
 
-		UDPEndPoint(std::string a, std::string p, int id = -1)
+		UDPEndPoint(const std::string &a, const std::string &p, int id = -1)
+			: address(a), port(p), sourceID(id)
 		{
-			address = a, port = p;
-			sourceID = id;
 		}
 		int ID() { return sourceID; }
 	};
@@ -145,24 +141,29 @@ namespace IO
 			fmt = MessageFormat::NMEA;
 		}
 
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg) override;
 
-		void Receive(const AIS::Message *data, int len, TAG &tag);
-		void Receive(const JSON::JSON *data, int len, TAG &tag);
-		void Receive(const AIS::GPS *data, int len, TAG &tag);
+		void Receive(const AIS::Message *data, int len, TAG &tag) override;
+		void Receive(const JSON::JSON *data, int len, TAG &tag) override;
+		void Receive(const AIS::GPS *data, int len, TAG &tag) override;
 
-		void Start();
+		void Start() override;
 		void Start(UDPEndPoint &u)
 		{
 			host = u.address;
 			port = u.port;
 			Start();
 		}
-		void Stop();
-		void SendTo(std::string str)
+		void Stop() override;
+		void SendTo(const std::string &str)
 		{
 			stats.bytes_out += str.length();
 			sendto(sock, str.c_str(), (int)str.length(), 0, address->ai_addr, (int)address->ai_addrlen);
+		}
+		void SendTo(const char *data, int len)
+		{
+			stats.bytes_out += len;
+			sendto(sock, data, len, 0, address->ai_addr, (int)address->ai_addrlen);
 		}
 	};
 
@@ -176,44 +177,38 @@ namespace IO
 		bool persistent = true;
 		std::string uuid;
 		bool include_sample_start = false;
-		unsigned long lines_sent = 0;
 
 	public:
 		TCPClientStreamer() : OutputMessage("TCP Client") { fmt = MessageFormat::NMEA; }
 
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg) override;
 
-		void Receive(const AIS::Message *data, int len, TAG &tag);
-		void Receive(const JSON::JSON *data, int len, TAG &tag);
-		void Receive(const AIS::GPS *data, int len, TAG &tag);
+		void Receive(const AIS::Message *data, int len, TAG &tag) override;
+		void Receive(const JSON::JSON *data, int len, TAG &tag) override;
+		void Receive(const AIS::GPS *data, int len, TAG &tag) override;
 
-		void Start();
-		void Stop();
+		void Start() override;
+		void Stop() override;
 
-		int SendTo(std::string str)
+		int SendTo(const std::string &str)
 		{
 			if (connection)
-			{
-				lines_sent++;
 				return connection->send(str.c_str(), (int)str.length());
-			}
-
 			return -1;
 		}
 
 		int SendTo(const char *str)
 		{
 			if (connection)
-			{
-				lines_sent++;
 				return connection->send(str, strlen(str));
-			}
 			return -1;
 		}
 
-		bool isFirstDataSend()
+		int SendTo(const char *data, int len)
 		{
-			return tcp.getBytesSent() == 0;
+			if (connection)
+				return connection->send(data, len);
+			return -1;
 		}
 	};
 
@@ -227,14 +222,14 @@ namespace IO
 
 		virtual ~TCPlistenerStreamer() {};
 
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg) override;
 
-		void Receive(const AIS::Message *data, int len, TAG &tag);
-		void Receive(const JSON::JSON *data, int len, TAG &tag);
-		void Receive(const AIS::GPS *data, int len, TAG &tag);
+		void Receive(const AIS::Message *data, int len, TAG &tag) override;
+		void Receive(const JSON::JSON *data, int len, TAG &tag) override;
+		void Receive(const AIS::GPS *data, int len, TAG &tag) override;
 
-		void Start();
-		void Stop() {}
+		void Start() override;
+		void Stop() override {}
 	};
 
 	class MQTTStreamer : public OutputMessage
@@ -248,7 +243,6 @@ namespace IO
 		Protocol::WebSocket ws;
 		Protocol::ProtocolBase *session = &tcp;
 
-		std::string json;
 		Util::TemplateString topic_template;
 
 	public:
@@ -257,12 +251,12 @@ namespace IO
 			fmt = MessageFormat::JSON_FULL;
 		}
 
-		void Start();
-		void Stop();
+		void Start() override;
+		void Stop() override;
 
-		void Receive(const AIS::Message *data, int len, TAG &tag);
-		void Receive(const JSON::JSON *data, int len, TAG &tag);
+		void Receive(const AIS::Message *data, int len, TAG &tag) override;
+		void Receive(const JSON::JSON *data, int len, TAG &tag) override;
 
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg) override;
 	};
 }

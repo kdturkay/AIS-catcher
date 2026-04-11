@@ -33,6 +33,8 @@
 
 #include "Device/Device.h"
 
+constexpr int N_SAMPLES_PER_SYMBOL = 5;
+
 namespace AIS
 {
 	enum class Mode
@@ -52,45 +54,6 @@ namespace AIS
 		BASESTATION
 	};
 
-	// idea is to avoid that message threads from different devices cause issues downstream (e.g. with sending UDP or updating the database).
-	// can also be done further downstream
-	class MessageMutex : public SimpleStreamInOut<AIS::Message, AIS::Message>
-	{
-		static std::mutex mtx;
-
-	public:
-		virtual ~MessageMutex() {}
-		virtual void Receive(const AIS::Message *data, int len, TAG &tag)
-		{
-			std::lock_guard<std::mutex> lock(mtx);
-			Send(data, len, tag);
-		}
-		virtual void Receive(AIS::Message *data, int len, TAG &tag)
-		{
-			std::lock_guard<std::mutex> lock(mtx);
-			Send(data, len, tag);
-		}
-	};
-
-	// idea is to avoid that message threads from different devices cause issues downstream (e.g. with sending UDP or updating the database).
-	// can also be done further downstream
-	class MessageMutexADSB : public SimpleStreamInOut<Plane::ADSB, Plane::ADSB>
-	{
-		static std::mutex mtx;
-
-	public:
-		virtual ~MessageMutexADSB() {}
-		virtual void Receive(const Plane::ADSB *data, int len, TAG &tag)
-		{
-			std::lock_guard<std::mutex> lock(mtx);
-			Send(data, len, tag);
-		}
-		virtual void Receive(Plane::ADSB *data, int len, TAG &tag)
-		{
-			std::lock_guard<std::mutex> lock(mtx);
-			Send(data, len, tag);
-		}
-	};
 
 	// Abstract demodulation model
 	class Model : public Setting
@@ -103,13 +66,14 @@ namespace AIS
 		Mode mode = Mode::AB;
 		std::string designation = "AB";
 
-		Device::Device *device;
+		Device::Device *device = nullptr;
 		Util::Timer<RAW> timer;
-		MessageMutex output;
-		MessageMutexADSB outputADSB;
+		Util::PassThrough<Message> output;
+		Util::PassThrough<Plane::ADSB> outputADSB;
 		Util::PassThrough<GPS> output_gps;
 
 	public:
+		Model() : Setting("Model") {}
 		virtual ~Model() {}
 		virtual void buildModel(char, char, int, bool, Device::Device *d) { device = d; }
 
@@ -117,25 +81,28 @@ namespace AIS
 		StreamOut<GPS> &OutputGPS() { return output_gps; }
 		StreamOut<Plane::ADSB> &OutputADSB() { return outputADSB; }
 
-		void setName(std::string s) { name = s; }
-		std::string getName() { return name; }
+		void setName(const std::string &s) { name = s; }
+		const std::string &getName() { return name; }
 
 		float getTotalTiming() { return timer.getTotalTiming(); }
 
 		void setMode(Mode m) { mode = m; }
 		void setOwnMMSI(int m) { own_mmsi = m; }
 		void setDesignation(const std::string &s) { designation = s; }
-		virtual Setting &Set(std::string option, std::string arg)
+		virtual Setting &SetKey(AIS::Keys key, const std::string &arg)
 		{
-			Util::Convert::toUpper(option);
-
-			if (option == "STATION_ID" || option == "ID")
+			switch (key)
+			{
+			case AIS::KEY_SETTING_STATION_ID:
+			case AIS::KEY_SETTING_ID:
 				station = Util::Parse::Integer(arg);
-			else if (option == "OWN_MMSI")
+				break;
+			case AIS::KEY_SETTING_OWN_MMSI:
 				own_mmsi = Util::Parse::Integer(arg);
-			else
+				break;
+			default:
 				throw std::runtime_error("Model: unknown setting.");
-
+			}
 			return *this;
 		}
 
@@ -169,8 +136,6 @@ namespace AIS
 		bool MA_DS = false;
 		bool allowDSK = false;
 
-		const int nSymbolsPerSample = 48000 / 9600;
-
 		Connection<CFLOAT32> *C_a = nullptr, *C_b = nullptr;
 		DSP::Rotate ROT;
 
@@ -182,7 +147,7 @@ namespace AIS
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
 
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 	};
 
@@ -192,7 +157,7 @@ namespace AIS
 		Demod::FM FM_a, FM_b;
 
 		DSP::Filter FR_a, FR_b;
-		std::vector<AIS::Decoder> DEC_a, DEC_b;
+		AIS::Decoder DEC_a[N_SAMPLES_PER_SYMBOL], DEC_b[N_SAMPLES_PER_SYMBOL];
 		DSP::Deinterleave<FLOAT32> S_a, S_b;
 
 	public:
@@ -215,11 +180,11 @@ namespace AIS
 	class ModelDefault : public ModelFrontend
 	{
 		DSP::SquareFreqOffsetCorrection CGF_a, CGF_b;
-		std::vector<Demod::PhaseSearch> CD_a, CD_b;
-		std::vector<Demod::PhaseSearchEMA> CD_EMA_a, CD_EMA_b;
+		Demod::PhaseSearch CD_a[N_SAMPLES_PER_SYMBOL], CD_b[N_SAMPLES_PER_SYMBOL];
+		Demod::PhaseSearchEMA CD_EMA_a[N_SAMPLES_PER_SYMBOL], CD_EMA_b[N_SAMPLES_PER_SYMBOL];
 
 		DSP::FilterComplex FC_a, FC_b;
-		std::vector<AIS::Decoder> DEC_a, DEC_b;
+		AIS::Decoder DEC_a[N_SAMPLES_PER_SYMBOL], DEC_b[N_SAMPLES_PER_SYMBOL];
 		DSP::ScatterPLL S_a, S_b;
 
 	protected:
@@ -231,7 +196,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 	};
 
@@ -243,10 +208,10 @@ namespace AIS
 		DSP::FilterComplex FC_a, FC_b;
 		DSP::Filter FR_af, FR_bf;
 
-		std::vector<Demod::PhaseSearchEMA> CD_EMA_a, CD_EMA_b;
+		Demod::PhaseSearchEMA CD_EMA_a[N_SAMPLES_PER_SYMBOL], CD_EMA_b[N_SAMPLES_PER_SYMBOL];
 		Demod::FM FM_af, FM_bf;
 
-		std::vector<AIS::Decoder> DEC_a, DEC_b, DEC_af, DEC_bf;
+		AIS::Decoder DEC_a[N_SAMPLES_PER_SYMBOL], DEC_b[N_SAMPLES_PER_SYMBOL], DEC_af[N_SAMPLES_PER_SYMBOL], DEC_bf[N_SAMPLES_PER_SYMBOL];
 		DSP::ScatterPLL S_a, S_b;
 
 		DSP::Deinterleave<CFLOAT32> throttle_a, throttle_b;
@@ -261,7 +226,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 	};
 
@@ -273,7 +238,7 @@ namespace AIS
 		DSP::Upsample US;
 
 		DSP::Filter FR_a, FR_b;
-		std::vector<AIS::Decoder> DEC_a, DEC_b;
+		AIS::Decoder DEC_a[N_SAMPLES_PER_SYMBOL], DEC_b[N_SAMPLES_PER_SYMBOL];
 		DSP::Deinterleave<FLOAT32> S_a, S_b;
 
 		Util::ConvertRAW convert;
@@ -290,7 +255,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 		ModelClass getClass() { return ModelClass::TXT; }
 	};
@@ -301,7 +266,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 		ModelClass getClass() { return ModelClass::N2K; }
 	};
@@ -312,7 +277,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 		ModelClass getClass() { return ModelClass::BASESTATION; }
 	};
@@ -323,7 +288,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 		ModelClass getClass() { return ModelClass::BASESTATION; }
 	};
@@ -334,7 +299,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 		ModelClass getClass() { return ModelClass::BASESTATION; }
 	};
@@ -345,7 +310,7 @@ namespace AIS
 
 	public:
 		void buildModel(char, char, int, bool, Device::Device *);
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 		ModelClass getClass() { return ModelClass::IQ; }
 	};

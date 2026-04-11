@@ -45,7 +45,7 @@ struct BinaryMessage
 	int dac;
 	int fi;
 	FLOAT32 lat, lon;
-	time_t timestamp;
+	time_t timestamp = 0;
 	bool used;
 
 	BinaryMessage() { Clear(); }
@@ -64,9 +64,9 @@ class DB : public StreamIn<JSON::JSON>,
 		   public StreamOut<JSON::JSON>
 {
 
-	JSON::StringBuilder builder;
+	JSON::Serializer builder{JSON_DICT_FULL};
 
-	int first, last, count, path_idx = 0;
+	int first = 0, last = 0, count = 0, path_idx = 0;
 	std::string content, delim;
 	float lat = LAT_UNDEFINED, lon = LON_UNDEFINED;
 	int TIME_HISTORY = 30 * 60;
@@ -77,31 +77,41 @@ class DB : public StreamIn<JSON::JSON>,
 	uint32_t own_mmsi = 0;
 
 	int Nships = 4096;
-	int Npaths = 4096 * 16;
+	int Npaths = Nships * 16;
+	int HASH_SIZE = 8209;
+
+	struct HashBucket
+	{
+		int first = -1;
+		int last = -1;
+	};
 
 	std::vector<Ship> ships;
 	std::vector<PathPoint> paths;
+	std::vector<HashBucket> hash_table;
 
 	bool isValidCoord(float lat, float lon);
 
 	static float deg2rad(float deg) { return deg * PI / 180.0f; }
 	static int rad2deg(float rad) { return (int)(360 + rad * 180 / PI) % 360; }
+	int Hash(uint32_t mmsi) { return mmsi % HASH_SIZE; }
 
 	int findShip(uint32_t mmsi);
-	int createShip();
+	int createShip(int hash);
 	void moveShipToFront(int);
-	bool updateFields(const JSON::Property &p, const AIS::Message *msg, Ship &v, bool allowApproximate);
+	bool updateFields(const JSON::Member &p, const AIS::Message *msg, Ship &v, bool allowApproximate, bool &staticUpdated);
 
 	bool updateShip(const JSON::JSON &, TAG &, Ship &);
 	void addToPath(int ptr);
 
 	static void getDistanceAndBearing(float lat1, float lon1, float lat2, float lon2, float &distance, int &bearing);
 
-	void getShipJSON(const Ship &ship, std::string &content, long int now);
-	std::string getSinglePathJSON(int);
-	std::string getSinglePathJSONCompact(int);
-	std::string getSinglePathJSONCompactSince(int, std::time_t, std::time_t);
-	std::string getSinglePathGeoJSON(int);
+	void getShipJSON(const Ship &ship, JSON::Writer &w, long int now);
+	void writeSinglePathJSON(int idx, JSON::Writer &w);
+	void writeSinglePathJSONCompact(int idx, JSON::Writer &w);
+	bool writeSinglePathJSONCompactSince(int idx, std::time_t since, JSON::Writer &w);
+	bool hasPathPointsSince(int idx, std::time_t since);
+	void writeSinglePathGeoJSON(int idx, JSON::Writer &w);
 	bool isNextPathPoint(int idx, uint32_t mmsi, int count) { return idx != -1 && paths[idx].mmsi == mmsi && paths[idx].count < count; }
 
 	AIS::Filter filter;
@@ -111,9 +121,11 @@ class DB : public StreamIn<JSON::JSON>,
 	int binaryMsgIndex = 0;
 
 	void processBinaryMessage(const JSON::JSON &data, Ship &ship, bool &position_updated);
+	void checkIntegrity();
+	int update_counter = 0;
 
 public:
-	DB() : builder(&AIS::KeyMap, JSON_DICT_FULL) {}
+	DB() : builder(JSON_DICT_FULL) {}
 
 	std::mutex mtx;
 
@@ -148,7 +160,7 @@ public:
 
 	std::string getShipJSON(int mmsi);
 	std::string getJSON(bool full = false);
-	std::string getJSONcompact(bool full = false);
+	std::string getJSONcompact(bool full = false, std::time_t since = 0);
 	std::string getPathJSON(uint32_t);
 	std::string getAllPathJSON();
 	std::string getAllPathJSONSince(std::time_t since);
@@ -163,10 +175,10 @@ public:
 
 	void setServerMode(bool b) { server_mode = b; }
 	void setMsgSave(bool b) { msg_save = b; }
-	void setFilterOption(std::string &opt, std::string &arg) { filter.SetOption(opt, arg); }
+	void setOptionKey(AIS::Keys key, const std::string &arg) { filter.SetOptionKey(key, arg); }
 	void setFilter(const AIS::Filter &f) { filter = f; }
 
-	std::string getBinaryMessagesJSON() const;
+	std::string getBinaryMessagesJSON();
 
 	// Persistence functions for ship database
 	bool Save(std::ofstream &file);

@@ -18,6 +18,7 @@
 #pragma once
 
 #include "AIS-catcher.h"
+#include "Keys.h"
 
 #include <chrono>
 #include <complex>
@@ -261,9 +262,15 @@ struct RAW
 
 struct Setting
 {
+	std::string setting_name;
+
+	Setting(const std::string &name = "") : setting_name(name) {}
 	virtual ~Setting() {}
-	virtual Setting &Set(std::string option, std::string arg) { return *this; }
+
+	virtual Setting &SetKey(AIS::Keys key, const std::string &arg) { return *this; }
 	virtual std::string Get() { return ""; }
+
+	const std::string &getName() const { return setting_name; }
 };
 
 template <typename T>

@@ -147,6 +147,8 @@ public:
 	void connectSink(T &sink) { ships >> sink; }
 
 	// JSON output
+	void writeHistoryJSON(JSON::Writer &w);
+	void writeCountersJSON(JSON::Writer &w);
 	std::string toHistoryJSON();
 	std::string toCountersJSON();
 
@@ -156,7 +158,7 @@ public:
 	float getMsgRate() { return hist_second.getAverage(); }
 
 	std::string getShipsJSON(bool full = false) { return ships.getJSON(full); }
-	std::string getShipsJSONcompact() { return ships.getJSONcompact(); }
+	std::string getShipsJSONcompact(std::time_t since = 0) { return ships.getJSONcompact(false, since); }
 	std::string getBinaryMessagesJSON() { return ships.getBinaryMessagesJSON(); }
 	std::string getKML() { return ships.getKML(); }
 	std::string getGeoJSON() { return ships.getGeoJSON(); }
@@ -266,7 +268,7 @@ private:
 	PrometheusCounter dataPrometheus;
 	ByteCounter raw_counter;
 
-	std::time_t time_start;
+	std::time_t time_start = 0;
 	std::string station = "\"\"", station_link = "\"\"";
 	std::string os, hardware;
 
@@ -333,8 +335,9 @@ public:
 
 	bool isPortSet() { return port_set; }
 	// HTTP callbacks
-	void Request(IO::TCPServerConnection &c, const std::string &r, bool gzip);
+	void Request(IO::TCPServerConnection &c, const std::string &r, bool gzip) override;
 
-	Setting &Set(std::string option, std::string arg);
-	std::string Get() { return ""; }
+	Setting &SetKey(AIS::Keys key, const std::string &arg) override;
+	std::string Get() override { return ""; }
+
 };

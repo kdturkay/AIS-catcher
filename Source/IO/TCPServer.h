@@ -101,10 +101,11 @@ namespace IO
 		bool start(int port);
 		bool SendAll(const std::string &m);
 		bool SendAllDirect(const std::string &m);
+		bool SendAllDirect(const char *data, int len);
 
 		void setReusePort(bool b) { reuse_port = b; }
 		bool setNonBlock(SOCKET sock);
-		void setIP(std::string ip) { IP_BIND = ip; }
+		void setIP(const std::string &ip) { IP_BIND = ip; }
 
 	protected:
 		SOCKET sock = -1;

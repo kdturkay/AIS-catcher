@@ -55,7 +55,7 @@ namespace Device
 		struct airspy_device *dev = nullptr;
 		bool lost = false;
 		std::vector<uint32_t> rates;
-		uint64_t serial;
+		uint64_t serial = 0;
 
 		static int callback_static(airspy_transfer_t *tf);
 		void callback(CFLOAT32 *, int);
@@ -99,13 +99,13 @@ namespace Device
 #endif
 
 	public:
-		AIRSPY() : Device(Format::CF32, 0, Type::AIRSPY) {}
+		AIRSPY() : Device(Format::CF32, 0, Type::AIRSPY, "AIRSPY") {}
 
 		std::string getProduct() { return "AIRSPY"; }
 		std::string getVendor() { return "AIRSPY"; }
 
 		// Settings (always available)
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 	};
 }

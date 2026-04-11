@@ -39,89 +39,124 @@ namespace AIS
 
 		enum class ParseState
 		{
-			IDLE,
-			JSON,
+			FIND_START,
+			SKIP_TO_EOL,
 			NMEA,
-			BINARY,
-			TAG_BLOCK
+			TAG_BLOCK,
+			JSON,
+			BINARY
 		};
 
 		struct AIVDM
 		{
 			std::string sentence;
-			std::string line;
-			std::string data;
-
-			uint64_t timestamp;
-			int groupId = 0; // NMEA 4.0 tag block group ID
+			uint64_t timestamp = 0;
+			uint32_t match_key = 0; // groupId: (1<<31)|gid, else: (t1<<24)|(t2<<16)|(ch<<8)|(count<<4)|ID
+			uint32_t message_error = 0;
+			uint16_t data_offset = 0;
+			uint16_t data_len = 0;
+			uint8_t count = 0;
+			uint8_t number = 0;
+			uint8_t fillbits = 0;
 
 			void reset()
 			{
 				sentence.clear();
-				data.clear();
 				timestamp = time(nullptr);
-				groupId = 0;
+				match_key = 0;
 				message_error = 0;
+				data_offset = 0;
+				data_len = 0;
+				count = 0;
+				number = 0;
+				fillbits = 0;
 			}
-			char channel;
-			int count;
-			int number;
-			int ID;
-			int checksum;
-			int fillbits;
-			int talkerID;
-			uint32_t message_error;
+
+			char channel() const { return (char)((match_key >> 8) & 0xFF); }
 		} aivdm;
 
-		std::vector<std::string> parts;
+		static bool matches(const AIVDM &a, const AIVDM &b)
+		{
+			return a.match_key == b.match_key;
+		}
 
-		char prev = '\n';
-		ParseState state = ParseState::IDLE;
+		// Zero-allocation field splitter: stores delimiter positions into source string
+		const std::string *splitStr = nullptr;
+		int splitDelim[18] = {}; // delimiter positions (leading sentinel + up to 16 commas + trailing sentinel)
+		int splitCount = 0; // number of fields
+		int splitChecksum = 0; // XOR checksum accumulated during split
+
+		int partLen(int i) const { return splitDelim[i + 1] - splitDelim[i] - 1; }
+		char partAt(int i, int j) const { return (*splitStr)[splitDelim[i] + 1 + j]; }
+		const char *partPtr(int i) const { return splitStr->data() + splitDelim[i] + 1; }
+		bool partEmpty(int i) const { return partLen(i) == 0; }
+		std::string partStr(int i) const { return splitStr->substr(splitDelim[i] + 1, partLen(i)); }
+		int partInt(int i) const;
+		ParseState state = ParseState::FIND_START;
 		std::string line;
-		int count;
+		int count = 0;
+
+		// Scan context — set by Receive(), used by scanners
+		const char *buf = nullptr;
+		int bufsize = 0;
+		int pos = 0;
+		// Per-message context — set by scanners/process functions, read by dispatch
+		struct MsgCtx {
+			int64_t rxtime = 0;
+			int station = -1;
+			int groupId = 0;
+			uint64_t ssc = 0;
+			uint16_t sl = 0;
+			int64_t toa = 0;
+
+			void reset() { rxtime = 0; station = -1; groupId = 0; ssc = 0; sl = 0; toa = 0; }
+		} mctx;
+
+		void findStart();
+		void scanLine(TAG &tag);
+		void scanJSON(TAG &tag);
+		void scanBinary(TAG &tag);
 		int own_mmsi = -1;
 
 		std::vector<AIVDM> queue;
 
-		void submitAIS(TAG &tag, int64_t t, uint64_t ssc, uint16_t sl, int thisstation, int64_t toa = 0);
+		void initMsg(char channel, int src);
+		void assembleAIS(TAG &tag);
 		void addline(const AIVDM &a);
-		void reset(char);
-		void clean(char, int, int groupId = 0);
-		int search(const AIVDM &a);
+		void reset();
+		void clean(const AIVDM &ref);
+		int search();
 
-		bool isNMEAchar(char c) { return (c >= 40 && c < 88) || (c >= 96 && c <= 56 + 0x3F); }
-		bool isHEX(char c) { return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'); }
-		int fromHEX(char c) { return (c >= '0' && c <= '9') ? (c - '0') : ((c >= 'A' && c <= 'F') ? (c - 'A' + 10) : (c - 'a' + 10)); }
+		static bool isHexDigit(char c) { unsigned u = (unsigned char)c; return (u - '0' < 10u) | ((u | 0x20) - 'a' < 6u); }
+		static int hexDigitValue(char c) { unsigned u = (unsigned char)c, d = u - '0'; return d < 10u ? d : (int)((u | 0x20) - 'a' + 10); }
 
-		int NMEAchecksum(std::string s);
+		float GpsToDecimal(const char *, int len, char, bool &error);
 
-		float GpsToDecimal(const char *, char, bool &error);
-
-		bool regenerate = false;
-		bool stamp = true;
-		bool crc_check = false;
-		bool JSON_input = false;
-		bool VDO = true;
-		bool warnings = true;
-		bool includeGPS = true;
+		bool cfg_regenerate = false;
+		bool cfg_stamp = true;
+		bool cfg_crc_check = false;
+		bool cfg_JSON_input = false;
+		bool cfg_VDO = true;
+		bool cfg_warnings = true;
+		bool cfg_GPS = true;
 
 		JSON::Parser parser;
+		JSON::Document jsonDoc;
 
-		void split(const std::string &);
-		std::string trim(const std::string &);
-		void processJSONsentence(const std::string &s, TAG &tag, int64_t t);
-		bool processAIS(const std::string &s, TAG &tag, int64_t t, uint64_t ssc, uint16_t sl, int thisstation, int groupId, std::string &error_msg, int64_t toa = 0);
-		bool processGGA(const std::string &s, TAG &tag, int64_t t, std::string &error_msg);
-		bool processGLL(const std::string &s, TAG &tag, int64_t t, std::string &error_msg);
-		bool processRMC(const std::string &s, TAG &tag, int64_t t, std::string &error_msg);
-		bool processBinaryPacket(const std::string &packet, TAG &tag, std::string &error_msg);
-		bool parseTagBlock(const std::string &s, std::string &nmea, int64_t &timestamp, int &thisstation, int &groupId, std::string &error_msg);
-		bool processTagBlock(const std::string &s, TAG &tag, int64_t &t, std::string &error_msg);
-		bool processNMEAline(const std::string &s, TAG &tag, int64_t t, int thisstation, int groupId, std::string &error_msg);
-		bool isCompleteNMEA(const std::string &s, bool newline);
+		void split(const std::string &, size_t offset = 0);
+		void processJSONsentence(TAG &tag);
+		bool processAIS(const std::string &s, TAG &tag);
+		bool processGPS(const std::string &s, TAG &tag, const char *name,
+						int min_fields, int max_fields,
+						int lat_idx, int ns_idx, int lon_idx, int ew_idx,
+						int fix_idx = -1);
+		bool processBinaryPacket(TAG &tag);
+		bool parseTagBlock(const std::string &s, std::string &nmea);
+		bool processTagBlock(const std::string &s, TAG &tag);
+		bool processNMEAline(const std::string &s, TAG &tag);
 
 	public:
-		NMEA() : parser(&AIS::KeyMap, JSON_DICT_FULL)
+		NMEA() : parser(JSON_DICT_INPUT)
 		{
 			parser.setSkipUnknown(true);
 		}
@@ -129,24 +164,24 @@ namespace AIS
 		virtual ~NMEA() {}
 		void Receive(const RAW *data, int len, TAG &tag);
 
-		void setRegenerate(bool b) { regenerate = b; }
-		bool getRegenerate() { return regenerate; }
+		void setRegenerate(bool b) { cfg_regenerate = b; }
+		bool getRegenerate() { return cfg_regenerate; }
 
-		void setVDO(bool b) { VDO = b; }
-		bool getVDO() { return VDO; }
+		void setVDO(bool b) { cfg_VDO = b; }
+		bool getVDO() { return cfg_VDO; }
 		void setUUID(const std::string &u) { uuid = u; }
-		std::string getUUID() { return uuid; }
+		const std::string &getUUID() { return uuid; }
 
 		void setStation(int s) { station = s; }
 		int getStation() { return station; }
 
-		void setWarnings(bool b) { warnings = b; }
-		void setGPS(bool b) { includeGPS = b; }
-		void setCRCcheck(bool b) { crc_check = b; }
-		bool getCRCcheck() { return crc_check; }
-		void setJSON(bool b) { JSON_input = b; }
-		void setStamp(bool b) { stamp = b; }
-		bool getStamp() { return stamp; }
+		void setWarnings(bool b) { cfg_warnings = b; }
+		void setGPS(bool b) { cfg_GPS = b; }
+		void setCRCcheck(bool b) { cfg_crc_check = b; }
+		bool getCRCcheck() { return cfg_crc_check; }
+		void setJSON(bool b) { cfg_JSON_input = b; }
+		void setStamp(bool b) { cfg_stamp = b; }
+		bool getStamp() { return cfg_stamp; }
 		void setOwnMMSI(int m) { own_mmsi = m; }
 
 		Connection<GPS> outGPS;

@@ -64,6 +64,11 @@ option(SQLITE "Include SQLITE support" ON)
 option(OPENSSL "Include OPENSSL support" ON)
 option(NMEA2000 "Include NMEA2000 support" ON)
 option(ARMV6 "Compile for Raspberry Pi Zero" OFF)
+option(RBIT "Use ARM RBIT instruction for bit reversal" OFF)
+
+if(RBIT)
+    add_definitions(-DHASRBIT)
+endif()
 
 set(NMEA2000_PATH "." CACHE PATH "Path to NMEA2000 library")
 
@@ -93,9 +98,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options("-Wall")
     add_compile_options("-Wno-psabi")
     add_compile_options("-Wno-sign-compare")
-    set(OPTIMIZATION_FLAGS "-Ofast")
 elseif(MSVC)
-    set(OPTIMIZATION_FLAGS "-DWIN32_LEAN_AND_MEAN /EHsc /Oi /Ot /fp:fast") # spellchecker:disable-line
+    set(OPTIMIZATION_FLAGS "-DWIN32_LEAN_AND_MEAN /EHsc /W3 /Oi /Ot /fp:fast") # spellchecker:disable-line
 endif()
 
 set(CMAKE_CXX_FLAGS "${OPTIMIZATION_FLAGS}")
@@ -955,7 +959,6 @@ set(CPP
     Source/Utilities/Parse.cpp
     Source/Utilities/Convert.cpp
     Source/Utilities/Helper.cpp
-    Source/Utilities/Serialize.cpp
     Source/Utilities/TemplateString.cpp
     Source/Utilities/StreamHelpers.cpp
 )
@@ -965,7 +968,7 @@ set(HEADER
     Source/Device/Device.h Source/Device/FileWAV.h Source/Device/RTLTCP.h Source/Device/UDP.h Source/DSP/Demod.h Source/DSP/Filters.h Source/Marine/AIS.h Source/Marine/Message.h Source/Marine/MessageHistory.h Source/Marine/NMEA.h Source/Library/ZIP.h Source/Library/Signals.h Source/Device/SoapySDR.h Source/JSON/JSONAIS.h Source/JSON/JSON.h Source/Aviation/Basestation.h Source/Aviation/ADSB.h
     Source/Device/AIRSPY.h Source/Library/FIFO.h Source/Device/N2KsktCAN.h Source/Device/HACKRF.h Source/Device/HYDRASDR.h Source/Device/SDRPLAY.h Source/DSP/DSP.h Source/DSP/Model.h Source/Tracking/History.h Source/Tracking/Statistics.h Source/Library/Common.h Source/Library/Stream.h Source/Device/SpyServer.h Source/JSON/Keys.h Source/JSON/StringBuilder.h Source/JSON/Parser.h Source/Tracking/PlaneDB.h
     Source/Device/Serial.h Source/IO/N2KInterface.h Source/Marine/N2K.h Source/IO/N2KStream.h Source/Device/AIRSPYHF.h Source/Device/FileRAW.h Source/Device/RTLSDR.h Source/Device/ZMQ.h Source/DSP/FFT.h Source/IO/MsgOut.h Source/IO/Screen.h Source/IO/File.h Source/IO/StreamCounter.h Source/IO/Network.h Source/IO/HTTPServer.h Source/Utilities/StreamHelpers.h Source/IO/TCPServer.h Source/IO/Protocol.h
-    Source/Utilities/Parse.h Source/Utilities/Convert.h Source/Utilities/Helper.h Source/Utilities/Serialize.h Source/Utilities/PackedInt.h Source/Utilities/TemplateString.h Source/IO/OutputStats.h)
+    Source/Utilities/Parse.h Source/Utilities/Convert.h Source/Utilities/Helper.h Source/Utilities/PackedInt.h Source/Utilities/TemplateString.h Source/IO/OutputStats.h)
 
 set(APP_INCLUDES . ./Source ./Source/Tracking ./Source/DBMS ./Source/Library ./Source/Marine ./Source/Aviation ./Source/DSP ./Source/Application ./Source/IO ./Source/JSON ./Source/Utilities)
 

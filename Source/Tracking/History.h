@@ -22,6 +22,7 @@
 #include <memory>
 
 #include "Statistics.h"
+#include "StringBuilder.h"
 
 template <int N, int INTERVAL>
 class History : public StreamIn<JSON::JSON> {
@@ -113,11 +114,7 @@ public:
 
 		int tmp;
 
-		if (!readInteger(file, tmp, 0x4f80b)) return false;
-		if (!readInteger(file, tmp, 1)) return false;
-		if (!readInteger(file, tmp, /*sizeof(history)*/ -1)) return false;
-		if (!readInteger(file, tmp, INTERVAL)) return false;
-		if (!readInteger(file, tmp, N)) return false;
+		if (!(readInteger(file, tmp, 0x4f80b) && readInteger(file, tmp, 1) && readInteger(file, tmp, /*sizeof(history)*/ -1) && readInteger(file, tmp, INTERVAL) && readInteger(file, tmp, N))) return false;
 
 		readInteger(file, start, -1);
 		readInteger(file, end, -1);
@@ -144,48 +141,45 @@ public:
 		return avg / delta_time;
 	}
 
-	std::string lastStatToJSON() {
+	void writeLastStatJSON(JSON::Writer &w) {
 		std::lock_guard<std::mutex> l{ this->mtx };
 
 		long int tm = (long int) std::time(nullptr) / (long int)INTERVAL -1;
-		if (start == end || tm  > history[(end + N - 1) % N].time) return history[0].stat.toJSON(true);
-
-		return history[(end + N - 1) % N].stat.toJSON(false);
+		if (start == end || tm > history[(end + N - 1) % N].time)
+			history[0].stat.writeJSON(w, true);
+		else
+			history[(end + N - 1) % N].stat.writeJSON(w, false);
 	}
 
-	std::string toJSON() {
+	void writeJSON(JSON::Writer &w) {
 		std::lock_guard<std::mutex> l{ this->mtx };
 
-		std::string content;
 		long int tm_now = ((long int)time(nullptr)) / (long int)INTERVAL;
 
-		content += "{\"time\":[";
+		w.beginObject();
+		w.key("time").beginArray();
 		for (int i = N, tm = tm_now, idx = end; i > 0; i--) {
 			bool new_tm = history[idx].time >= tm;
-
-			content += std::to_string(i - N) + ",";
-
+			w.val(i - N);
 			if (new_tm) {
 				if (idx == start) break;
 				idx = (idx + N - 1) % N;
 			}
 			tm--;
 		}
-		if (content[content.size() - 1] == ',') content.pop_back();
-		content += "],\"stat\":[";
+		w.endArray();
 
+		w.key("stat").beginArray();
 		for (int i = N, tm = tm_now, idx = end; i > 0; i--) {
 			bool empty = history[idx].time < tm;
-			content += history[idx].stat.toJSON(empty) + ",";
-
+			history[idx].stat.writeJSON(w, empty);
 			if (!empty) {
 				if (idx == start) break;
 				idx = (idx + N - 1) % N;
 			}
 			tm--;
 		}
-		if (content[content.size() - 1] == ',') content.pop_back();
-		content += "]}";
-		return content;
+		w.endArray();
+		w.endObject();
 	}
 };

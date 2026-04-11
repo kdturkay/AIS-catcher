@@ -52,12 +52,13 @@ namespace Device
 		int r = getaddrinfo(server.c_str(), port.c_str(), &hints, &address);
 		if (r != 0 || address == NULL)
 		{
-			throw std::runtime_error("UDP: cannot create socket.");
+			throw std::runtime_error("UDP: cannot resolve address.");
 		}
 
 		sock = socket(address->ai_family, SOCK_DGRAM, 0);
 		if (sock == -1)
 		{
+			StopServer();
 			throw std::runtime_error("UDP: cannot create socket.");
 		}
 
@@ -65,14 +66,14 @@ namespace Device
 		int optval = 1;
 		if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) != 0)
 		{
+			StopServer();
 			throw std::runtime_error("UDP: cannot set socket option.");
 		}
 
-		r = fcntl(sock, F_GETFL, 0);
-		r = fcntl(sock, F_SETFL, r | O_NONBLOCK);
-
-		if (r == -1)
+		int flags = fcntl(sock, F_GETFL, 0);
+		if (flags == -1 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1)
 		{
+			StopServer();
 			throw std::runtime_error("UDP: cannot make the socket non-blocking.");
 		}
 #else
@@ -83,6 +84,7 @@ namespace Device
 		if (bind(sock, address->ai_addr, address->ai_addrlen) != 0)
 		{
 			Debug() << "UDP: binding to " << server << " port " << port << ": " << strerror(errno);
+			StopServer();
 			throw std::runtime_error("UDP: cannot bind to port.");
 		}
 		SleepSystem(100);
@@ -91,6 +93,7 @@ namespace Device
 	void UDP::Close()
 	{
 		Device::Close();
+		StopServer();
 	}
 
 	void UDP::Play()
@@ -158,25 +161,23 @@ namespace Device
 		DeviceList.push_back(Description("UDP", "UDP", "UDP", (uint64_t)0, Type::UDP));
 	}
 
-	Setting &UDP::Set(std::string option, std::string arg)
+	Setting &UDP::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "PORT")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_PORT:
 			port = arg;
-		}
-		else if (option == "SERVER")
-		{
+			break;
+		case AIS::KEY_SETTING_SERVER:
 			server = arg;
-		}
-		else if (option == "FORMAT")
-		{
+			break;
+		case AIS::KEY_SETTING_FORMAT:
 			throw std::runtime_error("UDP: format cannot be changed and need to be TXT.");
+			break;
+		default:
+			Device::SetKey(key, arg);
+			break;
 		}
-		else
-			Device::Set(option, arg);
-
 		return *this;
 	}
 

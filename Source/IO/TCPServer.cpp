@@ -129,8 +129,16 @@ namespace IO
 			}
 			else if (nread > 0)
 			{
-				msg += std::string(buffer, nread);
-				stamp = std::time(0);
+				if (msg.size() + nread > MAX_BUFFER_SIZE)
+				{
+					Warning() << "TCPServer: input buffer overflow, closing connection";
+					CloseUnsafe();
+				}
+				else
+				{
+					msg += std::string(buffer, nread);
+					stamp = std::time(0);
+				}
 			}
 		}
 	}
@@ -460,19 +468,24 @@ namespace IO
 
 	bool TCPServer::SendAllDirect(const std::string &m)
 	{
+		return SendAllDirect(m.c_str(), m.length());
+	}
+
+	bool TCPServer::SendAllDirect(const char *data, int len)
+	{
 		bool success = true;
 		for (auto &c : client)
 		{
 			if (c.isConnected())
 			{
-				if (!c.SendRaw(m.c_str(), m.length()))
+				if (!c.SendRaw(data, len))
 				{
 					c.Close();
 					Error() << "TCP listener: client not reading, close connection.";
 					success = false;
 				}
 				else if (pstats)
-					pstats->bytes_out += m.length();
+					pstats->bytes_out += len;
 			}
 		}
 		return success;

@@ -33,10 +33,10 @@ namespace IO
 				case MessageFormat::NMEA:
 				case MessageFormat::NMEA_TAG:
 				case MessageFormat::FULL:
-					std::cout << data[i].getNMEA() << std::endl;
+					std::cout << data[i].getNMEA() << '\n';
 					break;
 				default:
-					std::cout << data[i].getJSON() << std::endl;
+					std::cout << data[i].getJSON() << '\n';
 					break;
 				}
 			}
@@ -57,11 +57,15 @@ namespace IO
 				{
 				case MessageFormat::NMEA:
 					for (const auto &s : data[i].NMEA)
-						std::cout << s << std::endl;
+						std::cout << s << '\n';
 					break;
 				case MessageFormat::NMEA_TAG:
-					std::cout << data[i].getNMEATagBlock();
+				{
+					json.clear();
+					data[i].getNMEATagBlock(json);
+					std::cout.write(json.data(), json.size());
 					break;
+				}
 				case MessageFormat::FULL:
 					for (const auto &s : data[i].NMEA)
 					{
@@ -80,12 +84,16 @@ namespace IO
 						if (data[i].getStation())
 							std::cout << ", ID: " << data[i].getStation();
 
-						std::cout << ")" << std::endl;
+						std::cout << ")\n";
 					}
 					break;
 				case MessageFormat::JSON_NMEA:
-					std::cout << data[i].getNMEAJSON(tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start) << std::endl;
-					break;
+				{
+					json.clear();
+					data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, include_sample_start, 0, "", "\n");
+					std::cout.write(json.data(), json.size());
+				}
+				break;
 				default:
 					break;
 				}
@@ -100,8 +108,8 @@ namespace IO
 			if (filter.include(*(AIS::Message *)data[i].binary))
 			{
 				json.clear();
-				builder.stringify(data[i], json);
-				std::cout << json << std::endl;
+				builder.stringify(data[i], json, "\n");
+				std::cout.write(json.data(), json.size());
 			}
 		}
 	}

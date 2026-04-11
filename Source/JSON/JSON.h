@@ -18,8 +18,8 @@
 #pragma once
 
 #include <vector>
+#include <deque>
 #include <iostream>
-#include <memory>
 
 #include "Common.h"
 
@@ -27,12 +27,12 @@ namespace JSON
 {
 
 	class JSON;
-	class Property;
+	class Member;
 
 	// JSON value item, 8 bytes (32 bits), 16 bytes (64 bits)
 	class Value
 	{
-
+	public:
 		enum class Type
 		{
 			BOOL,
@@ -43,7 +43,10 @@ namespace JSON
 			ARRAY_STRING,
 			ARRAY,
 			EMPTY
-		} type;
+		};
+
+	private:
+		Type type;
 
 		union Data
 		{
@@ -63,8 +66,10 @@ namespace JSON
 		const std::vector<std::string> &getStringArray() const { return *data.as; }
 		const std::vector<Value> &getArray() const { return *data.a; }
 		const std::string getString() const { return isString() ? *data.s : std::string(""); }
+		const std::string &getStringRef() const { return *data.s; }
 		const JSON &getObject() const { return *data.o; }
 
+		Type getType() const { return type; }
 		const bool isObject() const { return type == Type::OBJECT; }
 		const bool isBool() const { return type == Type::BOOL; }
 		const bool isArray() const { return type == Type::ARRAY; }
@@ -120,49 +125,45 @@ namespace JSON
 		}
 	};
 
-	class Property
+	class Member
 	{
 
 		int key;
 		Value value;
 
 	public:
-		Property(int p, Value v)
+		Member(int p, Value v) : key(p), value(v)
 		{
-			key = p;
-			value = v;
 		}
-		Property(int p, long int v)
+		Member(int p, long int v) : key(p)
 		{
-			key = p;
 			value.setInt(v);
 		}
-		Property(int p, double v)
+		Member(int p, double v) : key(p)
 		{
-			key = p;
 			value.setFloat(v);
 		}
-		Property(int p, bool v)
+		Member(int p, bool v)
 		{
 			key = p;
 			value.setBool(v);
 		}
-		Property(int p, std::string *v)
+		Member(int p, std::string *v)
 		{
 			key = p;
 			value.setString(v);
 		}
-		Property(int p, std::vector<std::string> *v)
+		Member(int p, std::vector<std::string> *v)
 		{
 			key = p;
 			value.setStringArray(v);
 		}
-		Property(int p, JSON *v)
+		Member(int p, JSON *v)
 		{
 			key = p;
 			value.setObject(v);
 		}
-		Property(int p)
+		Member(int p)
 		{
 			key = p;
 			value.setNull();
@@ -172,90 +173,154 @@ namespace JSON
 		const Value &Get() const { return value; }
 	};
 
+	class Pool;
+
 	class JSON
 	{
 		friend class Parser;
+		friend class Pool;
 
 	private:
-		std::vector<Property> properties;
-
-		// memory to pointers containing objects, strings and arrays
-		// Property and Value can therefore only contain pointers and basic data types
-		std::vector<std::shared_ptr<JSON>> objects;
-		std::vector<std::shared_ptr<std::string>> strings;
-		std::vector<std::shared_ptr<std::vector<Value>>> arrays;
+		std::vector<Member> members;
 
 	public:
 		void *binary = NULL;
-		
+
 		void clear()
 		{
-			properties.clear();
-
-			objects.clear();
-			strings.clear();
-			arrays.clear();
+			members.clear();
 		}
 
-		const std::vector<Property> &getProperties() const { return properties; }
+		const std::vector<Member> &getMembers() const { return members; }
 
 		const Value *getValue(int p) const
 		{
-			for (auto &o : properties)
+			for (auto &o : members)
 				if (o.Key() == p)
 					return &o.Get();
 
 			return nullptr;
 		}
 
-		const Value *operator[](int p) { return getValue(p); }
+		const Value *operator[](int p) const { return getValue(p); }
 
 		void Add(int p, int v)
 		{
-			properties.push_back(Property(p, (long int)v));
+			members.push_back(Member(p, (long int)v));
 		}
 
 		void Add(int p, double v)
 		{
-			properties.push_back(Property(p, (double)v));
+			members.push_back(Member(p, (double)v));
 		}
 
 		void Add(int p, bool v)
 		{
-			properties.push_back(Property(p, (bool)v));
+			members.push_back(Member(p, (bool)v));
 		}
 
-		void Add(int p, std::shared_ptr<JSON> &v)
+		void Add(int p, JSON *v)
 		{
-			objects.push_back(v);
-			properties.push_back(Property(p, (JSON *)v.get()));
+			members.push_back(Member(p, v));
 		}
 
-		void Add(int p, const std::string &v)
-		{
-			strings.push_back(std::shared_ptr<std::string>(new std::string(v)));
-			properties.push_back(Property(p, (std::string *)strings.back().get()));
-		}
+		void Add(int p, const std::string &v, Pool &pool);
 
 		void Add(int p)
 		{
-			properties.push_back(Property(p));
+			members.push_back(Member(p));
 		}
 
 		void Add(int p, Value v)
 		{
-			properties.push_back(Property(p, (Value)v));
+			members.push_back(Member(p, (Value)v));
 		}
 
 		// for items where memory is managed outside the object
 		void Add(int p, const std::string *v)
 		{
-			properties.push_back(Property(p, (std::string *)v));
+			members.push_back(Member(p, (std::string *)v));
 		}
 
 		void Add(int p, const std::vector<std::string> *v)
 		{
-			properties.push_back(Property(p, (std::vector<std::string> *)v));
+			members.push_back(Member(p, (std::vector<std::string> *)v));
 		}
+	};
+
+	// Flat pool: owns all strings, arrays, and nested JSON objects
+	class Pool
+	{
+		std::deque<JSON> objects;
+		std::deque<std::string> strings;
+		std::deque<std::vector<Value>> arrays;
+
+		size_t objectCount = 0;
+		size_t stringCount = 0;
+		size_t arrayCount = 0;
+
+		template <typename T>
+		T &acquire(std::deque<T> &pool, size_t &count)
+		{
+			if (count >= pool.size())
+				pool.emplace_back();
+			return pool[count++];
+		}
+
+	public:
+		JSON *addObject()
+		{
+			auto &obj = acquire(objects, objectCount);
+			obj.clear();
+			return &obj;
+		}
+
+		std::string *addString(const std::string &v)
+		{
+			auto &s = acquire(strings, stringCount);
+			s = v;
+			return &s;
+		}
+
+		std::string *addString(const char *data, size_t len)
+		{
+			auto &s = acquire(strings, stringCount);
+			s.assign(data, len);
+			return &s;
+		}
+
+		std::vector<Value> *addArray()
+		{
+			auto &arr = acquire(arrays, arrayCount);
+			arr.clear();
+			return &arr;
+		}
+
+		void clear()
+		{
+			objectCount = 0;
+			stringCount = 0;
+			arrayCount = 0;
+		}
+	};
+
+	inline void JSON::Add(int p, const std::string &v, Pool &pool)
+	{
+		members.push_back(Member(p, pool.addString(v)));
+	}
+
+	// Document: owns a root JSON and its pool
+	struct Document
+	{
+		Pool pool;
+		JSON root;
+
+		void clear()
+		{
+			pool.clear();
+			root.clear();
+		}
+
+		const std::vector<Member> &getMembers() const { return root.getMembers(); }
 	};
 }

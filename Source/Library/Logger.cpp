@@ -38,21 +38,21 @@
 #include "Convert.h"
 #include "StringBuilder.h"
 
-std::unique_ptr<Logger> Logger::instance_ = nullptr;
 
 #ifdef HASSYSLOG
 #include <syslog.h>
 class SyslogHandler
 {
+	static std::string ident_;
 public:
-	SyslogHandler(std::string ident = "aiscatcher")
+	SyslogHandler(const std::string &ident = "aiscatcher")
 	{
-		openlog(ident.c_str(), LOG_PID, LOG_USER);
+		ident_ = ident;
+		openlog(ident_.c_str(), LOG_PID, LOG_USER);
 	}
 
 	~SyslogHandler()
 	{
-		closelog();
 	}
 
 	void operator()(const LogMessage &msg)
@@ -79,6 +79,7 @@ public:
 		syslog(priority, "%s", msg.message.c_str());
 	}
 };
+std::string SyslogHandler::ident_;
 #else
 class SyslogHandler
 {
@@ -122,46 +123,44 @@ std::string LogMessage::levelToString() const
 std::string LogMessage::toJSON() const
 {
 	std::string msg;
-	JSON::StringBuilder::stringify(message, msg);
+	JSON::stringify(message, msg);
 
 	return "{\"level\":\"" + levelToString() + "\",\"message\":" + msg + ",\"time\":\"" + time + "\"}";
 }
 
 Logger &Logger::getInstance()
 {
-	static std::once_flag onceFlag;
-	std::call_once(onceFlag, [&]()
-				   { instance_.reset(new Logger()); });
-	return *instance_;
+	static Logger instance;
+	return instance;
 }
 
-Setting &Logger::Set(std::string option, std::string arg)
+Setting &Logger::SetKey(AIS::Keys key, const std::string &arg)
 {
-	Util::Convert::toUpper(option);
-
-	if (option == "SYSTEM")
+	switch (key)
 	{
+	case AIS::KEY_SETTING_SYSTEM:
 		setLogToSystem("aiscatcher");
-	}
-	else if (option == "LEVEL")
+		break;
+	case AIS::KEY_SETTING_LEVEL:
 	{
-		Util::Convert::toUpper(arg);
-		if (arg == "DEBUG")
+		std::string a = arg;
+		Util::Convert::toUpper(a);
+		if (a == "DEBUG")
 			min_level_ = LogLevel::__DEBUG;
-		else if (arg == "INFO")
+		else if (a == "INFO")
 			min_level_ = LogLevel::__INFO;
-		else if (arg == "WARNING")
+		else if (a == "WARNING")
 			min_level_ = LogLevel::__WARNING;
-		else if (arg == "ERROR")
+		else if (a == "ERROR")
 			min_level_ = LogLevel::__ERROR;
-		else if (arg == "CRITICAL")
+		else if (a == "CRITICAL")
 			min_level_ = LogLevel::__CRITICAL;
 		else
 			throw std::runtime_error("Invalid log level: " + arg + ". Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL");
+		break;
 	}
-	else
-	{
-		throw std::runtime_error("Unknown option: " + option);
+	default:
+		throw std::runtime_error("Unknown option.");
 	}
 	return *this;
 }
@@ -209,10 +208,10 @@ std::vector<LogMessage> Logger::getLastMessages(int n)
 {
 	std::lock_guard<std::mutex> lock(mutex_);
 
-	n = MIN(n, message_buffer_.size());
+	n = MIN(n, (int)message_buffer_.size());
 
 	std::vector<LogMessage> result;
-	if (!message_buffer_.size())
+	if (n <= 0 || message_buffer_.empty())
 	{
 		return result;
 	}
@@ -258,18 +257,26 @@ void Logger::removeLogListener(int id)
 
 void Logger::notifyListeners(const LogMessage &msg)
 {
-	static std::atomic<bool> in_notify(false);
-	bool is_notifying = in_notify.exchange(true);
-	
-    if(is_notifying) return;
+	thread_local bool in_notify = false;
 
+	if (in_notify) return;
+
+	in_notify = true;
 	std::lock_guard<std::mutex> lock(mutex_);
 
-	for (const auto &listener : log_listeners_)
+	try
 	{
-		listener.callback(msg);
+		for (const auto &listener : log_listeners_)
+		{
+			listener.callback(msg);
+		}
 	}
-	in_notify.store(false);
+	catch (...)
+	{
+		in_notify = false;
+		throw;
+	}
+	in_notify = false;
 }
 
 void Logger::log(LogLevel level, const std::string &message)
@@ -285,13 +292,16 @@ void Logger::log(LogLevel level, const std::string &message)
 }
 
 LogStream::LogStream(LogLevel level)
-	: level_(level), stream_(new std::ostringstream())
+	: level_(level)
 {
+	if (level_ >= Logger::getInstance().getMinLevel())
+		stream_.reset(new std::ostringstream());
 }
 
 LogStream::~LogStream()
 {
-	Logger::getInstance().log(level_, stream_->str());
+	if (stream_)
+		Logger::getInstance().log(level_, stream_->str());
 }
 
 // Convenience functions

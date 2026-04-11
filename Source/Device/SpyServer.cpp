@@ -38,7 +38,7 @@ namespace Device
 	void SpyServer::Open(uint64_t h)
 	{
 		Debug() << "Connecting to SpyServer...";
-		client.setValue("TIMEOUT", std::to_string(timeout));
+		client.setOptionKey(AIS::KEY_SETTING_TIMEOUT, std::to_string(timeout));
 
 		if (!client.connect()) // host, port, false, timeout))
 			throw std::runtime_error("SPYSERVER: cannot open connection.");
@@ -315,7 +315,8 @@ namespace Device
 
 			if (remainingBytes)
 			{
-				int len = client.read(data.data(), remainingBytes, timeout, false);
+				int toRead = remainingBytes < (int)BUFFER_SIZE ? remainingBytes : (int)BUFFER_SIZE;
+				int len = client.read(data.data(), toRead, timeout, false);
 
 				if (len <= 0)
 				{
@@ -440,39 +441,40 @@ namespace Device
 		DeviceList.push_back(Description("SPYSERVER", "SPYSERVER", "SPYSERVER", (uint64_t)0, Type::SPYSERVER));
 	}
 
-	Setting &SpyServer::Set(std::string option, std::string arg)
+	Setting &SpyServer::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		client.setValue(option, arg);
-
-		if (option == "URL")
+		switch (key)
 		{
-			std::string prot, host, port, path, username, password;
-			Util::Parse::URL(arg, prot, username, password, host, port, path);
+		case AIS::KEY_SETTING_URL:
+		{
+			std::string prot, h, p, path, username, password;
+			Util::Parse::URL(arg, prot, username, password, h, p, path);
 
-			if (!host.empty())
-				Set("HOST", host);
-			if (!port.empty())
-				Set("PORT", port);
+			if (!h.empty())
+				SetKey(AIS::KEY_SETTING_HOST, h);
+			if (!p.empty())
+				SetKey(AIS::KEY_SETTING_PORT, p);
 			if (!prot.empty() && prot != "sdr")
 				throw std::runtime_error("SPYSERVER: protocol not supported.");
+			client.setOptionKey(AIS::KEY_SETTING_URL, arg);
+			break;
 		}
-		else if (option == "GAIN")
-		{
+		case AIS::KEY_SETTING_GAIN:
 			tuner_gain = Util::Parse::Float(arg, 0, 50);
-		}
-		else if (option == "HOST")
-		{
+			client.setOptionKey(AIS::KEY_SETTING_GAIN, arg);
+			break;
+		case AIS::KEY_SETTING_HOST:
 			host = arg;
-		}
-		else if (option == "PORT")
-		{
+			client.setOptionKey(AIS::KEY_SETTING_HOST, arg);
+			break;
+		case AIS::KEY_SETTING_PORT:
 			port = arg;
+			client.setOptionKey(AIS::KEY_SETTING_PORT, arg);
+			break;
+		default:
+			Device::SetKey(key, arg);
+			break;
 		}
-		else
-			Device::Set(option, arg);
-
 		return *this;
 	}
 

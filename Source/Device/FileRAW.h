@@ -33,6 +33,7 @@ namespace Device {
 		bool eoi = false;
 		bool done = false;
 		bool loop = false;
+		bool use_raw_stdin = false;
 
 		FIFO fifo;
 
@@ -44,7 +45,7 @@ namespace Device {
 		void Run();
 
 	public:
-		RAWFile() : Device(Format::CU8, 1536000, Type::RAWFILE) {}
+		RAWFile() : Device(Format::CU8, 1536000, Type::RAWFILE, "RAW File") {}
 		// Control
 		void Close();
 		void Play();
@@ -54,7 +55,7 @@ namespace Device {
 		bool isStreaming() { return Device::isStreaming() && !done; }
 
 		// Settings
-		Setting& Set(std::string option, std::string arg);
+		Setting& SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 		std::string getProduct() { return "File (RAW)"; }
 		std::string getVendor() { return "File"; }

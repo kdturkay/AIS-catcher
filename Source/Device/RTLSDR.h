@@ -77,32 +77,41 @@ namespace Device
 
 	public:
 		// Control
-		void Open(uint64_t h);
+		void Open(uint64_t h) override;
 #ifdef HASRTL_ANDROID
 		void OpenWithFileDescriptor(int);
 #endif
-		void Play();
-		void Stop();
-		void Close();
+		void Play() override;
+		void Stop() override;
+		void Close() override;
 
-		bool isStreaming() { return Device::isStreaming() && !lost; }
-		bool isCallback() { return true; }
+		bool isStreaming() override { return Device::isStreaming() && !lost; }
+		bool isCallback() override { return true; }
 
-		void getDeviceList(std::vector<Description> &DeviceList);
+		void getDeviceList(std::vector<Description> &DeviceList) override;
 
-		std::string getProduct() { return product; }
-		std::string getVendor() { return vendor; }
-		std::string getSerial() { return serial; }
+		std::string getProduct() override { return product; }
+		std::string getVendor() override { return vendor; }
+		std::string getSerial() override { return serial; }
 
-		void setFormat(Format f) {}
+		void setFormat(Format f) override {}
 #endif
 
 	public:
-		RTLSDR() : Device(Format::CU8, 1536000, Type::RTLSDR) {}
-		~RTLSDR() { Close(); }
+		RTLSDR() : Device(Format::CU8, 1536000, Type::RTLSDR, "RTLSDR") {}
+		~RTLSDR()
+		{
+			try
+			{
+				Close();
+			}
+			catch (...)
+			{
+			}
+		}
 
 		// Settings (always available)
-		Setting &Set(std::string option, std::string arg);
-		std::string Get();
+		Setting &SetKey(AIS::Keys key, const std::string &arg) override;
+		std::string Get() override;
 	};
 }

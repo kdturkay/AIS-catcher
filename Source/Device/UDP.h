@@ -52,8 +52,8 @@ namespace Device {
 		std::string port;
 		std::string server;
 
-		struct addrinfo* address;
-		SOCKET sock;
+		struct addrinfo* address = nullptr;
+		SOCKET sock = -1;
 		bool lost = false;
 
 		std::thread run_thread;
@@ -64,8 +64,8 @@ namespace Device {
 		void applySettings();
 
 	public:
-		UDP() : Device(Format::TXT, 0, Type::UDP) {};
-		~UDP() {};
+		UDP() : Device(Format::TXT, 0, Type::UDP, "UDP") {};
+		~UDP() { StopServer(); }
 
 		// Control
 		void Close();
@@ -78,7 +78,7 @@ namespace Device {
 		std::string getRateDescription() { return "N/A"; }
 
 		// Settings
-		Setting& Set(std::string option, std::string arg);
+		Setting& SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 
 		std::string getProduct() { return "UDP"; }

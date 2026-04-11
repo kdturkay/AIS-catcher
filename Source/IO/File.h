@@ -30,7 +30,7 @@ namespace IO
 		bool append_mode = true;
 
 	public:
-		FileOutput() : OutputMessage() { fmt = MessageFormat::NMEA; }
+		FileOutput() : OutputMessage("File") { fmt = MessageFormat::NMEA; }
 
 		~FileOutput()
 		{
@@ -75,7 +75,9 @@ namespace IO
 					if (!filter.include(data[i]))
 						continue;
 
-					file << data[i].getNMEATagBlock();
+					json.clear();
+					data[i].getNMEATagBlock(json);
+					file.write(json.data(), json.size());
 				}
 			}
 			else if (fmt == MessageFormat::BINARY_NMEA)
@@ -85,8 +87,9 @@ namespace IO
 					if (!filter.include(data[i]))
 						continue;
 
-					std::string binary_packet = data[i].getBinaryNMEA(tag);
-					file.write(binary_packet.c_str(), binary_packet.length());
+					json.clear();
+					data[i].getBinaryNMEA(json, tag);
+					file.write(json.data(), json.size());
 				}
 			}
 			else
@@ -96,7 +99,9 @@ namespace IO
 					if (!filter.include(data[i]))
 						continue;
 
-					file << data[i].getNMEAJSON(tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, false, tag.ipv4, "") << std::endl;
+					json.clear();
+					data[i].getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, false, tag.ipv4, "", "\n");
+					file.write(json.data(), json.size());
 				}
 			}
 
@@ -114,8 +119,8 @@ namespace IO
 				if (filter.include(*(AIS::Message *)data[i].binary))
 				{
 					json.clear();
-					builder.stringify(data[i], json);
-					file << json << std::endl;
+					builder.stringify(data[i], json, "\n");
+					file.write(json.data(), json.size());
 				}
 			}
 			if (file.fail())
@@ -125,26 +130,26 @@ namespace IO
 			}
 		}
 
-		Setting &Set(std::string option, std::string arg)
+		Setting &SetKey(AIS::Keys key, const std::string &arg)
 		{
-			Util::Convert::toUpper(option);
-
-			if (option == "FILE")
+			switch (key)
 			{
+			case AIS::KEY_SETTING_FILE:
 				filename = arg;
-			}
-			else if (option == "MODE")
+				break;
+			case AIS::KEY_SETTING_MODE:
 			{
-				Util::Convert::toUpper(arg);
-
-				if (arg != "APPEND" && arg != "APP" && arg != "OUT")
+				std::string a = arg;
+				Util::Convert::toUpper(a);
+				if (a != "APPEND" && a != "APP" && a != "OUT")
 					throw std::runtime_error("File output - unknown mode: " + arg);
-
-				append_mode = arg == "APPEND" || arg == "APP";
+				append_mode = a == "APPEND" || a == "APP";
+				break;
 			}
-			else if (!OutputMessage::setOption(option, arg))
-			{
-				throw std::runtime_error("File output - unknown option: " + option);
+			default:
+				if (!setOptionKey(key, arg) && !filter.SetOptionKey(key, arg))
+					throw std::runtime_error("File output - unknown option.");
+				break;
 			}
 			return *this;
 		}

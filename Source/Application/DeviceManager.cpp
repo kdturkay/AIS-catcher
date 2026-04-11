@@ -155,9 +155,9 @@ bool DeviceManager::openDevice(int sample_rate, int bandwidth, int ppm, int freq
 	if (sample_rate)
 		device->setSampleRate(sample_rate);
 	if (ppm)
-		device->Set("FREQOFFSET", std::to_string(ppm));
+		device->SetKey(AIS::KEY_SETTING_FREQOFFSET, std::to_string(ppm));
 	if (bandwidth)
-		device->Set("BW", std::to_string(bandwidth));
+		device->SetKey(AIS::KEY_SETTING_BANDWIDTH, std::to_string(bandwidth));
 
 	tag.hardware = device->getProduct();
 	tag.driver = device->getDriver();
@@ -179,26 +179,21 @@ void DeviceManager::printAvailableDevices(bool JSON)
 	}
 	else
 	{
-		std::cout << "{\"devices\":[";
-
+		std::string s;
+		JSON::Writer w(s);
+		w.beginObject().key("devices").beginArray();
 		for (int i = 0; i < device_list.size(); i++)
 		{
 			std::string type = Util::Parse::DeviceTypeString(device_list[i].getType());
 			std::string serial = device_list[i].getSerial();
-			std::string name = type + " [" + serial + "]";
-
-			// Properly escape JSON strings
-			std::string type_escaped = JSON::StringBuilder::stringify(type, false);
-			std::string serial_escaped = JSON::StringBuilder::stringify(serial, false);
-			std::string name_escaped = JSON::StringBuilder::stringify(name, false);
-
-			std::cout << "{\"input\":\"" + type_escaped;
-			std::cout << "\",\"serial\":\"" + serial_escaped;
-			std::cout << "\",\"name\":\"" + name_escaped + "\"";
-
-			std::cout << "}" << (i == device_list.size() - 1 ? "" : ",");
+			w.beginObject()
+				.kv("input", type)
+				.kv("serial", serial)
+				.kv("name", type + " [" + serial + "]")
+				.endObject();
 		}
-		std::cout << "]}\n";
+		w.endArray().endObject().finish();
+		std::cout << s << "\n";
 	}
 }
 

@@ -56,7 +56,7 @@ namespace Device
 		struct hydrasdr_device *dev = nullptr;
 		bool lost = false;
 		std::vector<uint32_t> rates;
-		uint64_t serial;
+		uint64_t serial = 0;
 
 		static int callback_static(hydrasdr_transfer *tf);
 		void callback(CFLOAT32 *, int);
@@ -100,13 +100,13 @@ namespace Device
 #endif
 
 	public:
-		HYDRASDR() : Device(Format::CF32, 0, Type::HYDRASDR) {}
+		HYDRASDR() : Device(Format::CF32, 0, Type::HYDRASDR, "HYDRASDR") {}
 
 		std::string getProduct() { return "HYDRASDR"; }
 		std::string getVendor() { return "HYDRASDR"; }
 
 		// Settings (always available)
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 		std::string Get();
 	};
 }

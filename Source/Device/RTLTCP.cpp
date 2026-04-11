@@ -41,14 +41,14 @@ namespace Device
 		{
 		case PROTOCOL::MQTT:
 			session = tcp.add(&mqtt);
-			mqtt.setValue("SUBSCRIBE", "on");
+			mqtt.setOptionKey(AIS::KEY_SETTING_SUBSCRIBE, "on");
 			break;
 		case PROTOCOL::GPSD:
 			session = tcp.add(&gpsd);
 			break;
 		case PROTOCOL::RTLTCP:
 			session = tcp.add(&rtltcp);
-			tcp.setValue("TIMEOUT", "2");
+			tcp.setOptionKey(AIS::KEY_SETTING_TIMEOUT, "2");
 			break;
 		case PROTOCOL::WS:
 			session = tcp.add(&ws);
@@ -56,18 +56,18 @@ namespace Device
 		case PROTOCOL::WSMQTT:
 			session = tcp.add(&ws);
 			session = ws.add(&mqtt);
-			ws.setValue("PROTOCOLS", "mqtt");
-			ws.setValue("BINARY", "on");
-			mqtt.setValue("SUBSCRIBE", "on");
+			ws.setOptionKey(AIS::KEY_SETTING_PROTOCOLS, "mqtt");
+			ws.setOptionKey(AIS::KEY_SETTING_BINARY, "on");
+			mqtt.setOptionKey(AIS::KEY_SETTING_SUBSCRIBE, "on");
 			break;
 		default:
 			break;
 		}
 
-		rtltcp.setValue("FREQUENCY", std::to_string(frequency));
-		rtltcp.setValue("RATE", std::to_string(sample_rate));
-		rtltcp.setValue("FREQOFFSET", std::to_string(freq_offset));
-		rtltcp.setValue("BANDWIDTH", std::to_string(tuner_bandwidth));
+		rtltcp.setOptionKey(AIS::KEY_SETTING_FREQUENCY, std::to_string(frequency));
+		rtltcp.setOptionKey(AIS::KEY_SETTING_SAMPLE_RATE, std::to_string(sample_rate));
+		rtltcp.setOptionKey(AIS::KEY_SETTING_FREQOFFSET, std::to_string(freq_offset));
+		rtltcp.setOptionKey(AIS::KEY_SETTING_BANDWIDTH, std::to_string(tuner_bandwidth));
 
 		if (!session->connect())
 		{
@@ -164,29 +164,29 @@ namespace Device
 		DeviceList.push_back(Description("RTLTCP", "RTLTCP", "RTLTCP", (uint64_t)0, Type::RTLTCP));
 	}
 
-	Setting &RTLTCP::Set(std::string option, std::string arg)
+	Setting &RTLTCP::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "URL")
+		switch (key)
+		{
+		case AIS::KEY_SETTING_URL:
 		{
 			std::string prot, host, port, path, username, password;
 			Util::Parse::URL(arg, prot, username, password, host, port, path);
 
 			if (!host.empty())
-				Set("HOST", host);
+				SetKey(AIS::KEY_SETTING_HOST, host);
 			if (!port.empty())
-				Set("PORT", port);
+				SetKey(AIS::KEY_SETTING_PORT, port);
 			if (!prot.empty())
-				Set("PROTOCOL", prot);
+				SetKey(AIS::KEY_SETTING_PROTOCOL, prot);
 			if (!username.empty())
-				Set("USERNAME", username);
+				SetKey(AIS::KEY_SETTING_USERNAME, username);
 			if (!password.empty())
-				Set("PASSWORD", password);
+				SetKey(AIS::KEY_SETTING_PASSWORD, password);
+			break;
 		}
-		else if (option == "PROTOCOL")
+		case AIS::KEY_SETTING_PROTOCOL:
 		{
-
 			if (!Util::Parse().Protocol(arg, Protocol))
 				throw std::runtime_error("RTLTCP: unknown protocol: " + arg);
 
@@ -199,17 +199,9 @@ namespace Device
 				setFormat(Format::CU8);
 				break;
 			case PROTOCOL::GPSD:
-				setFormat(Format::TXT);
-				break;
 			case PROTOCOL::MQTT:
-				setFormat(Format::TXT);
-				break;
 			case PROTOCOL::WS:
-				setFormat(Format::TXT);
-				break;
 			case PROTOCOL::WSMQTT:
-				setFormat(Format::TXT);
-				break;
 			case PROTOCOL::TXT:
 				setFormat(Format::TXT);
 				break;
@@ -225,13 +217,13 @@ namespace Device
 			default:
 				throw std::runtime_error("RTLTCP: unsupported protocol: " + arg);
 			}
+			break;
 		}
-		else
-		{
-			if (!tcp.setValue(option, arg) && !mqtt.setValue(option, arg) && !gpsd.setValue(option, arg) && !rtltcp.setValue(option, arg) && !ws.setValue(option, arg))
-				Device::Set(option, arg);
+		default:
+			if (!tcp.setOptionKey(key, arg) && !mqtt.setOptionKey(key, arg) && !gpsd.setOptionKey(key, arg) && !rtltcp.setOptionKey(key, arg) && !ws.setOptionKey(key, arg))
+				Device::SetKey(key, arg);
+			break;
 		}
-
 		return *this;
 	}
 

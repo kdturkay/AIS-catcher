@@ -25,6 +25,8 @@
 #include "JSONAIS.h"
 #include "AIS-catcher.h"
 
+#include <algorithm>
+
 #ifdef _WIN32
 #pragma warning(disable : 4996)
 #endif
@@ -100,21 +102,14 @@ namespace AIS
 		int u = msg.getInt(start, len);
 		json.Add(AIS::KEY_TURN_UNSCALED, u);
 
-		if (u == -128)
-			// json.Add(p, &nan);
-			json.Add(p, (int)-128);
-		else if (u == -127)
-			// json.Add(p, &fastleft);
-			json.Add(p, (int)-127);
-		else if (u == 127)
-			// json.Add(p, &fastright);
-			json.Add(p, (int)127);
-		else
+		if (u > -127 && u < 127)
 		{
 			double rot = u / 4.733;
 			rot = (u < 0) ? -rot * rot : rot * rot;
 			json.Add(p, (int)(rot + 0.5));
 		}
+		else
+			json.Add(p, u); // sentinel: -128, -127, or 127
 	}
 
 	void JSONAIS::B(const AIS::Message &msg, int p, int start, int len)
@@ -128,10 +123,26 @@ namespace AIS
 		if (len != 40)
 			return;
 
-		std::stringstream s;
-		s << std::setfill('0') << std::setw(4) << msg.getUint(start, 14) << "-" << std::setw(2) << msg.getUint(start + 14, 4) << "-" << std::setw(2) << msg.getUint(start + 18, 5) << "T"
-		  << std::setw(2) << msg.getUint(start + 23, 5) << ":" << std::setw(2) << msg.getUint(start + 28, 6) << ":" << std::setw(2) << msg.getUint(start + 34, 6) << "Z";
-		str = std::string(s.str());
+		auto put2 = [](char *d, unsigned v)
+		{ d[0] = '0' + v / 10; d[1] = '0' + v % 10; };
+		auto put4 = [](char *d, unsigned v)
+		{ d[0] = '0' + v / 1000; d[1] = '0' + (v / 100) % 10; d[2] = '0' + (v / 10) % 10; d[3] = '0' + v % 10; };
+
+		char buf[21]; // "YYYY-MM-DDTHH:MM:SSZ"
+		put4(buf, msg.getUint(start, 14));
+		buf[4] = '-';
+		put2(buf + 5, msg.getUint(start + 14, 4));
+		buf[7] = '-';
+		put2(buf + 8, msg.getUint(start + 18, 5));
+		buf[10] = 'T';
+		put2(buf + 11, msg.getUint(start + 23, 5));
+		buf[13] = ':';
+		put2(buf + 14, msg.getUint(start + 28, 6));
+		buf[16] = ':';
+		put2(buf + 17, msg.getUint(start + 34, 6));
+		buf[19] = 'Z';
+		buf[20] = '\0';
+		str.assign(buf, 20);
 		json.Add(p, &str);
 	}
 
@@ -140,18 +151,27 @@ namespace AIS
 		if (len != 20)
 			return;
 
-		std::stringstream s;
-		s << std::setfill('0') << std::setw(2) << msg.getUint(start, 4) << "-" << std::setw(2) << msg.getUint(start + 4, 5) << "T"
-		  << std::setw(2) << msg.getUint(start + 9, 5) << ":" << std::setw(2) << msg.getUint(start + 14, 6) << "Z";
-		str = std::string(s.str());
+		auto put2 = [](char *d, unsigned v)
+		{ d[0] = '0' + v / 10; d[1] = '0' + v % 10; };
+
+		char buf[15]; // "MM-DDTHH:MMZ"
+		put2(buf, msg.getUint(start, 4));
+		buf[2] = '-';
+		put2(buf + 3, msg.getUint(start + 4, 5));
+		buf[5] = 'T';
+		put2(buf + 6, msg.getUint(start + 9, 5));
+		buf[8] = ':';
+		put2(buf + 9, msg.getUint(start + 14, 6));
+		buf[11] = 'Z';
+		buf[12] = '\0';
+		str.assign(buf, 12);
 		json.Add(p, &str);
 	}
 
 	void JSONAIS::T(const AIS::Message &msg, int p, int start, int len, std::string &str)
 	{
 		msg.getText(start, len, str);
-		while (!str.empty() && str[str.length() - 1] == ' ')
-			str.resize(str.length() - 1);
+		str.erase(str.find_last_not_of(' ') + 1);
 		json.Add(p, &str);
 	}
 
@@ -191,19 +211,13 @@ namespace AIS
 
 		if (mid > 100)
 		{
-			int l = 0, r = JSON_MAP_MID.size() - 1;
-			while (l != r)
+			auto it = std::lower_bound(JSON_MAP_MID.begin(), JSON_MAP_MID.end(), mid,
+									   [](const AIS::COUNTRY &c, uint32_t m)
+									   { return c.MID < m; });
+			if (it != JSON_MAP_MID.end() && it->MID == mid)
 			{
-				int m = (l + r + 1) / 2;
-				if (JSON_MAP_MID[m].MID > mid)
-					r = m - 1;
-				else
-					l = m;
-			}
-			if (JSON_MAP_MID[l].MID == mid)
-			{
-				json.Add(AIS::KEY_COUNTRY, &JSON_MAP_MID[l].country);
-				json.Add(AIS::KEY_COUNTRY_CODE, &JSON_MAP_MID[l].code);
+				json.Add(AIS::KEY_COUNTRY, &it->country);
+				json.Add(AIS::KEY_COUNTRY_CODE, &it->code);
 			}
 		}
 	}
@@ -908,7 +922,7 @@ namespace AIS
 		json.Add(AIS::KEY_DEVICE, &device);
 		json.Add(AIS::KEY_VERSION, tag.version);
 		json.Add(AIS::KEY_DRIVER, (int)tag.driver);
-		json.Add(AIS::KEY_HARDWARE, tag.hardware);
+		json.Add(AIS::KEY_HARDWARE, &tag.hardware);
 
 		if (tag.mode & 2)
 		{

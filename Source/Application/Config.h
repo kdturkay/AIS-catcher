@@ -47,23 +47,23 @@ class Config
 {
 	RunState &_state;
 
-	bool isActiveObject(const JSON::Value &pd);
-	void setSettingsFromJSON(const JSON::Value &pd, Setting &s);
-	void setHTTPfromJSON(const JSON::Property &pd);
-	void setUDPfromJSON(const JSON::Property &pd);
-	void setTCPfromJSON(const JSON::Property &pd);
-	void setMQTTfromJSON(const JSON::Property &pd);
-	void setTCPListenerfromJSON(const JSON::Property &pd);
-	void setModelfromJSON(const JSON::Property &p);
-	void setServerfromJSON(const JSON::Value &pd);
-	void setReceiverfromJSON(const std::vector<JSON::Property> &pd, bool unspecAllowed);
-	void setReceiverFromArray(const JSON::Property &pd);
-	void setSharing(const std::vector<JSON::Property> &props);
+	bool isActiveObject(const JSON::Value &m);
+	void setSettingsFromJSON(const JSON::Value &m, Setting &s);
+	void setHTTPfromJSON(const JSON::Member &m);
+	void setUDPfromJSON(const JSON::Member &m);
+	void setTCPfromJSON(const JSON::Member &m);
+	void setMQTTfromJSON(const JSON::Member &m);
+	void setTCPListenerfromJSON(const JSON::Member &m);
+	void setModelfromJSON(const JSON::Member &m);
+	void setServerfromJSON(const JSON::Value &m);
+	void setReceiverfromJSON(const std::vector<JSON::Member> &m, bool unspecAllowed);
+	void setReceiverFromArray(const JSON::Member &m);
+	void setSharing(const std::vector<JSON::Member> &members);
 
 public:
 	Config(RunState &state) : _state(state) {}
 
-	void read(std::string &file_config);
+	void read(const std::string &file_config);
 	void set(const std::string &str);
 
 	bool isSharingDefined() const { return _state.xshare_defined; }

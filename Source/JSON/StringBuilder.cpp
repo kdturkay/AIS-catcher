@@ -16,144 +16,41 @@
 */
 
 #include <string>
-#include <cmath>
 
 #include "StringBuilder.h"
-#include "Keys.h"
 
 namespace JSON {
 
-	// StringBuilder - Build string from JSON object
-
-	void StringBuilder::stringify(const std::string& str, std::string& json, bool esc) {
+	void stringify(const char *s, size_t len, std::string& json, bool esc) {
 		if (esc) json += '\"';
-		for (char c : str) {
+		size_t start = 0;
+
+		for (size_t i = 0; i < len; i++) {
+			unsigned char c = (unsigned char)s[i];
+			if (c >= 0x20 && c != '"' && c != '\\')
+				continue;
+
+			if (i > start) json.append(s + start, i - start);
+
 			switch (c) {
-			case '\"':
-				json += "\\\"";
+			case '"':  json.append("\\\"", 2); break;
+			case '\\': json.append("\\\\", 2); break;
+			case '\b': json.append("\\b", 2);  break;
+			case '\f': json.append("\\f", 2);  break;
+			case '\n': json.append("\\n", 2);  break;
+			case '\r': json.append("\\r", 2);  break;
+			case '\t': json.append("\\t", 2);  break;
+			default: {
+				static const char hex[] = "0123456789abcdef";
+				char esc_buf[6] = { '\\', 'u', '0', '0', hex[(c >> 4) & 0xF], hex[c & 0xF] };
+				json.append(esc_buf, 6);
 				break;
-			case '\\':
-				json += "\\\\";
-				break;
-			case '\r':			
-			case '\0':				
-				break;
-			case '\n':
-				json += "\\n";
-				break;
-			default:
-				json += c;
 			}
+			}
+			start = i + 1;
 		}
+		if (len > start) json.append(s + start, len - start);
 		if (esc) json += '\"';
 	}
 
-	void StringBuilder::to_string_enhanced(std::string& json, const Value& v, int key_index) {
-		json += '{';
-		
-		// Add value
-		json += "\"value\":";
-		to_string(json, v);
-		
-		// Add metadata if available
-		if (key_index >= 0 && key_index < AIS::KeyInfoMap.size()) {
-			const AIS::KeyInfo& info = AIS::KeyInfoMap[key_index];
-			
-			// Add unit if not empty
-			if (info.unit && strlen(info.unit) > 0) {
-				json += ",\"unit\":";
-				stringify(info.unit, json);
-			}
-			
-			// Add description if not empty
-			if (info.description && strlen(info.description) > 0) {
-				json += ",\"description\":";
-				stringify(info.description, json);
-			}
-			
-			// Add lookup value if available
-			if (info.lookup_table && (v.isInt() || v.isFloat())) {
-				int numeric_value = v.isInt() ? v.getInt() : static_cast<int>(v.getFloat());
-				if (numeric_value >= 0 && numeric_value < info.lookup_table->size()) {
-					json += ",\"text\":";
-					stringify((*info.lookup_table)[numeric_value], json);
-				}
-			}
-		}
-		
-		json += '}';
-	}
-
-	void StringBuilder::to_string(std::string& json, const Value& v) {
-
-		if (v.isString()) {
-			stringify(v.getString(), json);
-		}
-		else if (v.isObject()) {
-			stringify(v.getObject(), json);
-		}
-		else if (v.isArrayString()) {
-
-			const std::vector<std::string>& as = v.getStringArray();
-
-			json += '[';
-
-			if (as.size()) {
-				stringify(as[0], json);
-
-				for (int i = 1; i < as.size(); i++) {
-					json += ',';
-					stringify(as[i], json);
-				}
-			}
-
-			json += ']';
-		}
-		else if (v.isArray()) {
-
-			const std::vector<Value>& a = v.getArray();
-
-			json += '[';
-
-			bool first = true;
-			for (const auto& val : a) {
-
-				if (!first) json += ',';
-				first = false;
-
-				to_string(json, val);
-			}
-
-			json += ']';
-		}
-		else
-			v.to_string(json);
-	}
-
-	void StringBuilder::stringify(const JSON& object, std::string& json) {
-		bool first = true;
-		json += '{';
-		for (const Property& p : object.getProperties()) {
-
-			// Skip invalid keys to avoid out-of-bounds access
-			if (p.Key() < 0 || p.Key() >= keymap->size()) continue;
-
-			const std::string& key = (*keymap)[p.Key()][dict];
-
-			if (!key.empty()) {
-
-				if (!first) json += ',';
-				first = false;
-
-				json += "\"" + key + "\":";
-				
-				if (stringify_enhanced) {
-					to_string_enhanced(json, p.Get(), p.Key());
-				} else {
-					to_string(json, p.Get());
-				}
-			}
-		}
-		json += '}';
-	}
 }

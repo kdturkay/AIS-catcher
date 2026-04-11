@@ -41,14 +41,14 @@ class Receiver;
 class OutputStatistics
 {
 public:
-	std::vector<IO::StreamCounter> statistics;
+	std::vector<std::unique_ptr<IO::StreamCounter>> statistics;
 
 	void connect(Receiver &r);
 	void start();
 };
 
 // Hardware + Model with output connectors for messages and JSON
-class Receiver
+class Receiver : public Setting
 {
 
 	bool timing = false;
@@ -65,11 +65,13 @@ class Receiver
 	std::string ChannelNMEA = "AB";
 
 	// Output
-	std::vector<AIS::JSONAIS> jsonais;
+	std::vector<std::unique_ptr<AIS::JSONAIS>> jsonais;
 
 	TAG tag;
 
 public:
+	Receiver() : Setting("Receiver") {}
+
 	bool verbose = false;
 	std::vector<std::string> zones;
 
@@ -79,18 +81,57 @@ public:
 public:
 	DeviceManager& getDeviceManager() { return deviceManager; }
 
+	// Settings
+	Setting &SetKey(AIS::Keys key, const std::string &arg) override
+	{
+		switch (key)
+		{
+		case AIS::KEY_SETTING_VERBOSE:
+			verbose = Util::Parse::Switch(arg);
+			break;
+		case AIS::KEY_SETTING_CHANNEL:
+			setChannel(arg, "");
+			break;
+		case AIS::KEY_SETTING_META:
+			setTags(arg);
+			break;
+		case AIS::KEY_SETTING_OWN_MMSI:
+			own_mmsi = Util::Parse::Integer(arg);
+			break;
+		case AIS::KEY_SETTING_SERIAL:
+			deviceManager.SerialNumber() = arg;
+			break;
+		case AIS::KEY_SETTING_INPUT:
+			if (!Util::Parse::DeviceType(arg, deviceManager.InputType()))
+				throw std::runtime_error("unknown input type: " + arg);
+			break;
+		case AIS::KEY_SETTING_SAMPLE_RATE:
+			sample_rate = Util::Parse::Integer(arg, 12500, 12288000);
+			break;
+		case AIS::KEY_SETTING_BANDWIDTH:
+			bandwidth = Util::Parse::Integer(arg, 0, 20000000);
+			break;
+		case AIS::KEY_SETTING_FREQOFFSET:
+			ppm = Util::Parse::Integer(arg, -150, 150);
+			break;
+		case AIS::KEY_SETTING_LAT:
+			station_lat = Util::Parse::Float(arg);
+			break;
+		case AIS::KEY_SETTING_LON:
+			station_lon = Util::Parse::Float(arg);
+			break;
+		default:
+			throw std::runtime_error(getName() + ": unknown setting \"" + AIS::KeyMap[key][JSON_DICT_SETTING] + "\"");
+		}
+		return *this;
+	}
+
+
 	// Model
-	void setChannel(std::string mode) { setChannel(mode, ""); }
 	void setChannel(std::string mode, std::string NMEA);
-	void setOwnMMSI(int m) { own_mmsi = m; }
 	void setTags(const std::string &s);
 	void removeTags(const std::string &s);
 	void clearTags() { tag.mode = 0; }
-	void setLatLon(FLOAT32 lat, FLOAT32 lon)
-	{
-		station_lat = lat;
-		station_lon = lon;
-	}
 
 	bool &Timing() { return timing; }
 
@@ -99,11 +140,7 @@ public:
 	Connection<AIS::GPS> &OutputGPS(int i) { return models[i]->OutputGPS().out; }
 	Connection<Plane::ADSB> &OutputADSB(int i) { return models[i]->OutputADSB().out; }
 
-	Connection<JSON::JSON> &OutputJSON(int i) { return jsonais[i].out; }
-
-	void setSampleRate(int s) { sample_rate = s; }
-	void setBandwidth(int b) { bandwidth = b; }
-	void setPPM(int p) { ppm = p; }
+	Connection<JSON::JSON> &OutputJSON(int i) { return jsonais[i]->out; }
 
 	std::unique_ptr<AIS::Model> &addModel(int m);
 	std::unique_ptr<AIS::Model> &Model(int i) { return models[i]; }
@@ -111,7 +148,7 @@ public:
 	uint32_t getGroupMask() const {
 		uint32_t mask = 0;
 		for (int i = 0; i < (int)jsonais.size(); i++)
-			mask |= jsonais[i].out.getGroupOut();
+			mask |= jsonais[i]->out.getGroupOut();
 		return mask;
 	}
 

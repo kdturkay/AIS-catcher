@@ -18,8 +18,9 @@
 #pragma once
 #include <fstream>
 #include <iostream>
-#include <iomanip>
 #include <thread>
+#include <mutex>
+#include <vector>
 
 #ifdef HASPSQL
 #include <libpq-fe.h>
@@ -37,9 +38,6 @@ namespace IO
 
 	class PostgreSQL : public OutputMessage
 	{
-		JSON::StringBuilder builder;
-		std::string sql_trans;
-		std::stringstream sql;
 		AIS::Filter filter;
 		int station_id = 0;
 #ifdef HASPSQL
@@ -47,24 +45,32 @@ namespace IO
 #endif
 		int MAX_FAILS = 10;
 
-		std::string escape(const std::string &input)
-		{
-			std::string output;
-			for (const char c : input)
-			{
-				if (c == '\'')
-					output += c;
-
-				output += c;
-			}
-			return output;
-		}
-
 #ifdef HASPSQL
 		PGconn *con = nullptr;
 		std::vector<int> db_keys;
 		bool terminate = false, running = false;
 
+		struct QueuedEntry
+		{
+			std::string mmsi, station_id, msg_type, timestamp, channel, level, ppm;
+			int msg_type_int;
+			std::vector<std::string> nmea_lines;
+			struct KV
+			{
+				int key;
+				std::string value;
+			};
+			std::vector<KV> kvs;
+			struct Property
+			{
+				std::string db_key, value;
+			};
+			std::vector<Property> properties;
+			std::string type_bit, channel_bit;
+		};
+
+		std::vector<QueuedEntry> message_queue;
+		static const size_t MAX_QUEUE_SIZE = 2048;
 #endif
 
 		bool MSGS = false, NMEA = false, VP = false, VS = false, BS = false, ATON = false, SAR = false, VD = true;
@@ -76,29 +82,22 @@ namespace IO
 		int INTERVAL = 10;
 #ifdef HASPSQL
 		void post();
+		bool execTableInsert(const char *table, const QueuedEntry &entry, const int *keys, int nkeys, const char *msg_id);
+		bool execVessel(const QueuedEntry &entry, const char *msg_id);
 #endif
 	public:
-		PostgreSQL() : builder(&AIS::KeyMap, JSON_DICT_FULL) { fmt = MessageFormat::JSON_FULL; }
+		PostgreSQL() : OutputMessage("PostgreSQL") { fmt = MessageFormat::JSON_FULL; }
 		~PostgreSQL();
 
 #ifdef HASPSQL
 		void process();
-
-		std::string addVesselPosition(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addVesselStatic(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addVessel(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addBasestation(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addSARposition(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-		std::string addATON(const JSON::JSON *data, const AIS::Message *msg, const std::string &m, const std::string &s);
-
 		void Receive(const JSON::JSON *data, int len, TAG &tag);
 #endif
 
 		void setup();
 
 		void Start() { setup(); }
-		void setMap(int m) { builder.setMap(m); }
 
-		Setting &Set(std::string option, std::string arg);
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
 	};
 }

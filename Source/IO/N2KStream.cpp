@@ -53,7 +53,7 @@ namespace IO
 		double lat = LAT_UNDEFINED, lon = LON_UNDEFINED, cog = COG_UNDEFINED, speed = SPEED_UNDEFINED, turn = 0;
 		int heading = HEADING_UNDEFINED, status = 0, second = 0, raim = 0, accuracy = 0, maneuver = 0, radio = 0;
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -125,7 +125,7 @@ namespace IO
 		double lat = LAT_UNDEFINED, lon = LON_UNDEFINED;
 		int raim = 0, accuracy = 0, hour = 0, minute = 0, second = 0, year = 0, month = 0, day = 0, epfd = 0, days = 0, radio = 0;
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -208,10 +208,13 @@ namespace IO
 
 		int ais_version = 0, IMO = 0, shiptype = 0, to_bow = 0, to_stern = 0, to_starboard = 0, to_port = 0, month = 0, day = 0, hour = 0;
 		int minute = 0, epfd = 0, dte = 0, nDays = 0;
-		char callsign[7] = {' '}, shipname[20] = {' '}, destination[20] = {' '};
+		char callsign[7], shipname[20], destination[20];
+		std::memset(callsign, ' ', sizeof(callsign));
+		std::memset(shipname, ' ', sizeof(shipname));
+		std::memset(destination, ' ', sizeof(destination));
 		float draught = 0;
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -322,7 +325,7 @@ namespace IO
 		double lat = LAT_UNDEFINED, lon = LON_UNDEFINED, cog = COG_UNDEFINED;
 		int alt = 0, raim = 0, accuracy = 0, second = 0, reserved = 0, dte = 0, radio = 0, speed = 1023;
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -391,7 +394,7 @@ namespace IO
 	{
 
 		std::string text;
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -421,7 +424,7 @@ namespace IO
 		double lat = LAT_UNDEFINED, lon = LON_UNDEFINED, cog = COG_UNDEFINED, speed = SPEED_UNDEFINED;
 		int heading = HEADING_UNDEFINED, radio = 0, second = 0, raim = 0, accuracy = 0, CS = 0, display = 0, DSC = 0, band = 0, msg22 = 0, assigned = 0 /*, maneuver = 0*/;
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -500,9 +503,10 @@ namespace IO
 
 		double lat = LAT_UNDEFINED, lon = LON_UNDEFINED, cog = COG_UNDEFINED, speed = SPEED_UNDEFINED;
 		int heading = HEADING_UNDEFINED, shiptype = 0, to_bow = 0, to_stern = 0, second = 0, to_port = 0, to_starboard = 0, epfd = 0, accuracy = 0, raim = 0, dte = 0, assigned = 0;
-		char shipname[20] = {' '};
+		char shipname[20];
+		std::memset(shipname, ' ', sizeof(shipname));
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -598,9 +602,10 @@ namespace IO
 		int off_position = 0, regional = 0, raim = 0, virtual_aid = 0, assigned = 0;
 		double lat = LAT_UNDEFINED, lon = LON_UNDEFINED;
 
-		char name[20] = {' '};
+		char name[20];
+		std::memset(name, ' ', sizeof(name));
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -671,7 +676,7 @@ namespace IO
 		N2kMsg.AddByte(assigned << 7 | virtual_aid << 6 | off_position << 5 | aid_type);
 		N2kMsg.AddByte(epfd << 1);
 		N2kMsg.AddByte(regional);
-		N2kMsg.AddByte(ais.getChannel() == 'A' ? 1 : 0 | 0xe0);
+		N2kMsg.AddByte((ais.getChannel() == 'A' ? 1 : 0) | 0xe0);
 		N2kMsg.AddVarStr(name);
 
 		N2K::N2KInterface.sendMsg(N2kMsg);
@@ -681,9 +686,12 @@ namespace IO
 	{
 
 		int shiptype = 0, to_bow = 0, to_stern = 0, to_starboard = 0, to_port = 0, mothership_mmsi = 0, partno = 0;
-		char shipname[20] = {' '}, callsign[7] = {' '}, vendorid[7] = {' '};
+		char shipname[20], callsign[7], vendorid[7];
+		std::memset(shipname, ' ', sizeof(shipname));
+		std::memset(callsign, ' ', sizeof(callsign));
+		std::memset(vendorid, ' ', sizeof(vendorid));
 
-		for (const JSON::Property &p : data[0].getProperties())
+		for (const JSON::Member &p : data[0].getMembers())
 		{
 			switch (p.Key())
 			{
@@ -696,13 +704,13 @@ namespace IO
 			case AIS::KEY_CALLSIGN:
 			{
 				const std::string &s = p.Get().getString();
-				std::memcpy(callsign, s.c_str(), std::min(sizeof(shipname), s.size()));
+				std::memcpy(callsign, s.c_str(), std::min(sizeof(callsign), s.size()));
 			}
 			break;
 			case AIS::KEY_VENDORID:
 			{
 				const std::string &s = p.Get().getString();
-				std::memcpy(vendorid, s.c_str(), std::min(sizeof(shipname), s.size()));
+				std::memcpy(vendorid, s.c_str(), std::min(sizeof(vendorid), s.size()));
 			}
 			break;
 			case AIS::KEY_SHIPTYPE:
@@ -754,7 +762,7 @@ namespace IO
 			N2kMsg.Add2ByteUDouble(to_bow, 0.1);
 			N2kMsg.Add4ByteUInt(mothership_mmsi);
 			N2kMsg.AddByte(0xff);
-			N2kMsg.AddByte(ais.getChannel() == 'A' ? 1 : 0 | 0xe0);
+			N2kMsg.AddByte((ais.getChannel() == 'A' ? 1 : 0) | 0xe0);
 			N2kMsg.AddByte(0xff); // sequence ID
 		}
 
@@ -807,17 +815,17 @@ namespace IO
 		}
 	}
 
-	Setting &N2KStreamer::Set(std::string option, std::string arg)
+	Setting &N2KStreamer::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "DEVICE")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_DEVICE:
 			dev = arg;
-		}
-		else if (!setOption(option, arg) && !filter.SetOption(option, arg))
-		{
-			throw std::runtime_error("JSON output - unknown option: " + option);
+			break;
+		default:
+			if (!setOptionKey(key, arg) && !filter.SetOptionKey(key, arg))
+				throw std::runtime_error("N2K output - unknown option.");
+			break;
 		}
 		return *this;
 	}

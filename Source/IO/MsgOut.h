@@ -39,10 +39,45 @@ namespace IO
 	protected:
 		std::string json;
 		AIS::Filter filter;
-		JSON::StringBuilder builder;
+		JSON::Serializer builder{JSON_DICT_FULL};
 
 		OutputStats stats;
 		std::string description, type;
+		unsigned long lines_sent = 0;
+
+		// Formats one AIS message into the reusable `json` member buffer.
+		// Zero-allocation in steady state: clear() preserves capacity.
+		void formatInto(const AIS::Message &msg, TAG &tag,
+						bool sample_start, const std::string &uuid, const char *suffix)
+		{
+			json.clear();
+			switch (fmt)
+			{
+			case MessageFormat::NMEA:
+				for (const auto &s : msg.NMEA)
+				{
+					json += s;
+					json += suffix;
+				}
+				break;
+			case MessageFormat::NMEA_TAG:
+				msg.getNMEATagBlock(json);
+				break;
+			case MessageFormat::BINARY_NMEA:
+				msg.getBinaryNMEA(json, tag);
+				break;
+			case MessageFormat::COMMUNITY_HUB:
+				if (lines_sent > 0 && lines_sent % 100 != 0)
+					msg.getBinaryNMEA(json, tag);
+				else
+					msg.getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, sample_start, tag.ipv4, uuid, suffix);
+				break;
+			default:
+				msg.getNMEAJSON(json, tag.mode, tag.level, tag.ppm, tag.status, tag.hardware, tag.version, tag.driver, sample_start, tag.ipv4, uuid, suffix);
+				break;
+			}
+			lines_sent++;
+		}
 
 	public:
 		std::vector<std::string> zones;
@@ -52,21 +87,27 @@ namespace IO
 		void ConnectMessage(Receiver &r);
 		void ConnectJSON(Receiver &r);
 
-	public:
 		virtual void Start() {}
 		virtual void Stop() {}
 		void Connect(Receiver &r);
 
-		std::string getJSON() const
+		void writeJSON(JSON::Writer &w) const
 		{
-			return "{\"type\":\"" + type + "\"" + ",\"description\":\"" + description + "\"" + ",\"stats\":" + stats.toJSON() + "}";
+			w.beginObject()
+				.kv("type", type)
+				.kv("description", description)
+				.key("stats");
+			stats.writeJSON(w);
+			w.endObject();
 		}
 
 		std::string getSourcesStr()
 		{
 			uint64_t gi = StreamIn<AIS::Message>::getGroupsIn();
-			if (gi == GROUPS_ALL) return "sources: ALL";
-			if (gi == 0) return "sources: NONE";
+			if (gi == GROUPS_ALL)
+				return "sources: ALL";
+			if (gi == 0)
+				return "sources: NONE";
 			std::string s;
 			for (int i = 0; i < 32; i++)
 				if (gi & (1ULL << i))
@@ -74,51 +115,40 @@ namespace IO
 			return "sources: " + s;
 		}
 
-		OutputMessage() : builder(&AIS::KeyMap, JSON_DICT_FULL) {}
-		OutputMessage(const std::string &d) : builder(&AIS::KeyMap, JSON_DICT_FULL), type(d) {}
+		OutputMessage() : builder(JSON_DICT_FULL) {}
+		OutputMessage(const std::string &d) : Setting(d), builder(JSON_DICT_FULL), type(d) {}
 
 		virtual ~OutputMessage() { Stop(); }
 
-		bool setOption(std::string option, std::string arg)
+		bool setOptionKey(AIS::Keys key, const std::string &arg)
 		{
-			if (option == "JSON_FULL")
+			switch (key)
 			{
+			case AIS::KEY_SETTING_JSON_FULL:
 				Warning() << "JSON_FULL option is deprecated and will be removed in a future release. Use MSGFORMAT instead.";
 				if (Util::Parse::Switch(arg))
 					fmt = MessageFormat::JSON_FULL;
-
 				return true;
-			}
-			else if (option == "JSON")
-			{
+			case AIS::KEY_SETTING_JSON:
 				Warning() << "JSON option is deprecated and will be removed in a future release. Use MSGFORMAT instead.";
 				if (Util::Parse::Switch(arg))
-				{
 					fmt = MessageFormat::JSON_NMEA;
-				}
 				return true;
-			}
-			else if (option == "MSGFORMAT")
-			{
+			case AIS::KEY_SETTING_MSGFORMAT:
 				if (!Util::Parse::OutputFormat(arg, fmt))
 					throw std::runtime_error("Unknown message format: " + arg);
-
 				if (fmt == MessageFormat::JSON_ANNOTATED)
 					builder.setStringifyEnhanced(true);
-
+				else if (fmt == MessageFormat::JSON_SPARSE)
+					builder.setMap(JSON_DICT_SPARSE);
 				return true;
-			}
-			else if (option == "DESCRIPTION" || option == "DESC")
-			{
+			case AIS::KEY_SETTING_DESCRIPTION:
 				description = arg;
 				return true;
-			}
-			else if (option == "ZONE")
-			{
+			case AIS::KEY_SETTING_ZONE:
 				Util::Parse::Split(arg, ',', zones);
 				return true;
-			}
-			else if (option == "GROUPS_IN")
+			case AIS::KEY_SETTING_GROUPS_IN:
 			{
 				uint64_t g = Util::Parse::Integer(arg);
 				StreamIn<AIS::Message>::setGroupsIn(g);
@@ -126,7 +156,9 @@ namespace IO
 				StreamIn<AIS::GPS>::setGroupsIn(g);
 				return true;
 			}
-			return filter.SetOption(option, arg);
+			default:
+				return filter.SetOptionKey(key, arg);
+			}
 		}
 	};
 }

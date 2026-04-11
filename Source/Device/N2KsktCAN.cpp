@@ -49,7 +49,7 @@ namespace Device
 			else
 			{
 				Error() << "Requested interface #" << h << " is not available";
-				for (auto i : available_interfaces)
+				for (const auto &i : available_interfaces)
 					Error() << "Available interface: " << i;
 				throw std::runtime_error("NMEA2000: No available interfaces.");
 			}
@@ -116,17 +116,17 @@ namespace Device
 
 namespace Device
 {
-	Setting &N2KSCAN::Set(std::string option, std::string arg)
+	Setting &N2KSCAN::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		if (option == "INTERFACE")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_INTERFACE:
 			_iface = arg;
+			break;
+		default:
+			Device::SetKey(key, arg);
+			break;
 		}
-		else
-			Device::Set(option, arg);
-
 		return *this;
 	}
 

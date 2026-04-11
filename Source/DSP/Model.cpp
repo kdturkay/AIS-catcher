@@ -23,9 +23,6 @@
 
 namespace AIS
 {
-	std::mutex MessageMutex::mtx;
-	std::mutex MessageMutexADSB::mtx;
-
 	void ModelFrontend::buildModel(char CH1, char CH2, int sample_rate, bool timerOn, Device::Device *dev)
 	{
 		device = dev;
@@ -357,57 +354,49 @@ namespace AIS
 		return;
 	}
 
-	Setting &ModelFrontend::Set(std::string option, std::string arg)
+	Setting &ModelFrontend::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-		Util::Convert::toUpper(arg);
-
-		if (option == "FP_DS")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_FP_DS:
 			fixedpointDS = Util::Parse::Switch(arg);
 			MA_DS = false;
-		}
-		else if (option == "SOXR")
-		{
+			break;
+		case AIS::KEY_SETTING_SOXR:
 			SOXR_DS = Util::Parse::Switch(arg);
 			SAMPLERATE_DS = false;
 			MA_DS = false;
-		}
-		else if (option == "SRC")
-		{
+			break;
+		case AIS::KEY_SETTING_SRC:
 			SAMPLERATE_DS = Util::Parse::Switch(arg);
 			SOXR_DS = false;
 			MA_DS = false;
-		}
-		else if (option == "MA")
-		{
+			break;
+		case AIS::KEY_SETTING_MA:
 			MA_DS = Util::Parse::Switch(arg);
 			SAMPLERATE_DS = false;
 			SOXR_DS = false;
-		}
-		else if (option == "DSK")
-		{
+			break;
+		case AIS::KEY_SETTING_DSK:
 			allowDSK = Util::Parse::Switch(arg);
-		}
-		else if (option == "DROOP")
-		{
+			break;
+		case AIS::KEY_SETTING_DROOP:
 			droop_compensation = Util::Parse::Switch(arg);
-		}
-		else if (option == "STATION_ID")
-		{
+			break;
+		case AIS::KEY_SETTING_STATION_ID:
 			station = Util::Parse::Integer(arg);
-		}
-		else if (option == "DUMP")
-		{
-			wavA.setValue("FILE", arg + "_A.wav");
-			wavB.setValue("FILE", arg + "_B.wav");
-			wavA.setValue("RATE", "48000");
-			wavB.setValue("RATE", "48000");
+			break;
+		case AIS::KEY_SETTING_DUMP:
+			wavA.setOptionKey(AIS::KEY_SETTING_FILE, arg + "_A.wav");
+			wavB.setOptionKey(AIS::KEY_SETTING_FILE, arg + "_B.wav");
+			wavA.setOptionKey(AIS::KEY_SETTING_SAMPLE_RATE, "48000");
+			wavB.setOptionKey(AIS::KEY_SETTING_SAMPLE_RATE, "48000");
 			dump = true;
+			break;
+		default:
+			Model::SetKey(key, arg);
+			break;
 		}
-		else
-			Model::Set(option, arg);
-
 		return *this;
 	}
 
@@ -458,16 +447,13 @@ namespace AIS
 		FR_a.setTaps(Filters::Receiver);
 		FR_b.setTaps(Filters::Receiver);
 
-		S_a.setConnections(nSymbolsPerSample);
-		S_b.setConnections(nSymbolsPerSample);
-
-		DEC_a.resize(nSymbolsPerSample);
-		DEC_b.resize(nSymbolsPerSample);
+		S_a.setConnections(N_SAMPLES_PER_SYMBOL);
+		S_b.setConnections(N_SAMPLES_PER_SYMBOL);
 
 		*C_a >> FM_a >> FR_a >> S_a;
 		*C_b >> FM_b >> FR_b >> S_b;
 
-		for (int i = 0; i < nSymbolsPerSample; i++)
+		for (int i = 0; i < N_SAMPLES_PER_SYMBOL; i++)
 		{
 			DEC_a[i].setOrigin(CH1, station, own_mmsi);
 			DEC_b[i].setOrigin(CH2, station, own_mmsi);
@@ -475,7 +461,7 @@ namespace AIS
 			S_a.out[i] >> DEC_a[i] >> output;
 			S_b.out[i] >> DEC_b[i] >> output;
 
-			for (int j = 0; j < nSymbolsPerSample; j++)
+			for (int j = 0; j < N_SAMPLES_PER_SYMBOL; j++)
 			{
 				if (i != j)
 				{
@@ -499,22 +485,8 @@ namespace AIS
 		FC_a.setTaps(Filters::Coherent);
 		FC_b.setTaps(Filters::Coherent);
 
-		S_a.setConnections(nSymbolsPerSample);
-		S_b.setConnections(nSymbolsPerSample);
-
-		DEC_a.resize(nSymbolsPerSample);
-		DEC_b.resize(nSymbolsPerSample);
-
-		if (!PS_EMA)
-		{
-			CD_a.resize(nSymbolsPerSample);
-			CD_b.resize(nSymbolsPerSample);
-		}
-		else
-		{
-			CD_EMA_a.resize(nSymbolsPerSample);
-			CD_EMA_b.resize(nSymbolsPerSample);
-		}
+		S_a.setConnections(N_SAMPLES_PER_SYMBOL);
+		S_b.setConnections(N_SAMPLES_PER_SYMBOL);
 
 		CGF_a.setParams(512, 187);
 		CGF_b.setParams(512, 187);
@@ -528,7 +500,7 @@ namespace AIS
 		*C_a >> CGF_a >> FC_a >> S_a;
 		*C_b >> CGF_b >> FC_b >> S_b;
 
-		for (int i = 0; i < nSymbolsPerSample; i++)
+		for (int i = 0; i < N_SAMPLES_PER_SYMBOL; i++)
 		{
 			DEC_a[i].setOrigin(CH1, station, own_mmsi);
 			DEC_b[i].setOrigin(CH2, station, own_mmsi);
@@ -549,7 +521,7 @@ namespace AIS
 				S_a.out[i] >> CD_EMA_a[i] >> DEC_a[i] >> output;
 				S_b.out[i] >> CD_EMA_b[i] >> DEC_b[i] >> output;
 			}
-			for (int j = 0; j < nSymbolsPerSample; j++)
+			for (int j = 0; j < N_SAMPLES_PER_SYMBOL; j++)
 			{
 				if (i != j)
 				{
@@ -562,22 +534,20 @@ namespace AIS
 		return;
 	}
 
-	Setting &ModelDefault::Set(std::string option, std::string arg)
+	Setting &ModelDefault::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-		Util::Convert::toUpper(arg);
-
-		if (option == "PS_EMA")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_PS_EMA:
 			PS_EMA = Util::Parse::Switch(arg);
-		}
-		else if (option == "AFC_WIDE")
-		{
+			break;
+		case AIS::KEY_SETTING_AFC_WIDE:
 			CGF_wide = Util::Parse::Switch(arg);
+			break;
+		default:
+			ModelFrontend::SetKey(key, arg);
+			break;
 		}
-		else
-			ModelFrontend::Set(option, arg);
-
 		return *this;
 	}
 
@@ -599,21 +569,13 @@ namespace AIS
 		FR_af.setTaps(Filters::Receiver);
 		FR_bf.setTaps(Filters::Receiver);
 
-		S_a.setConnections(nSymbolsPerSample);
-		S_b.setConnections(nSymbolsPerSample);
-		S_af.setConnections(nSymbolsPerSample);
-		S_bf.setConnections(nSymbolsPerSample);
+		S_a.setConnections(N_SAMPLES_PER_SYMBOL);
+		S_b.setConnections(N_SAMPLES_PER_SYMBOL);
+		S_af.setConnections(N_SAMPLES_PER_SYMBOL);
+		S_bf.setConnections(N_SAMPLES_PER_SYMBOL);
 
 		throttle_a.setConnections(1);
 		throttle_b.setConnections(1);
-
-		DEC_a.resize(nSymbolsPerSample);
-		DEC_b.resize(nSymbolsPerSample);
-		DEC_af.resize(nSymbolsPerSample);
-		DEC_bf.resize(nSymbolsPerSample);
-
-		CD_EMA_a.resize(nSymbolsPerSample);
-		CD_EMA_b.resize(nSymbolsPerSample);
 
 		CGF_a.setParams(512, 187);
 		CGF_b.setParams(512, 187);
@@ -635,7 +597,7 @@ namespace AIS
 		throttle_a.out[0] >> FM_af >> FR_af >> S_af;
 		throttle_b.out[0] >> FM_bf >> FR_bf >> S_bf;
 
-		for (int i = 0; i < nSymbolsPerSample; i++)
+		for (int i = 0; i < N_SAMPLES_PER_SYMBOL; i++)
 		{
 			DEC_a[i].setOrigin(CH1, station, own_mmsi);
 			DEC_af[i].setOrigin(CH1, station, own_mmsi);
@@ -652,7 +614,7 @@ namespace AIS
 			S_af.out[i] >> DEC_af[i] >> output;
 			S_bf.out[i] >> DEC_bf[i] >> output;
 
-			for (int j = 0; j < nSymbolsPerSample; j++)
+			for (int j = 0; j < N_SAMPLES_PER_SYMBOL; j++)
 			{
 				DEC_af[i].DecoderMessage.Connect(DEC_a[j]);
 				DEC_a[i].DecoderMessage.Connect(DEC_af[j]);
@@ -674,22 +636,20 @@ namespace AIS
 		return;
 	}
 
-	Setting &ModelChallenger::Set(std::string option, std::string arg)
+	Setting &ModelChallenger::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-		Util::Convert::toUpper(arg);
-
-		if (option == "PS_EMA")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_PS_EMA:
 			PS_EMA = Util::Parse::Switch(arg);
-		}
-		else if (option == "AFC_WIDE")
-		{
+			break;
+		case AIS::KEY_SETTING_AFC_WIDE:
 			CGF_wide = Util::Parse::Switch(arg);
+			break;
+		default:
+			ModelFrontend::SetKey(key, arg);
+			break;
 		}
-		else
-			ModelFrontend::Set(option, arg);
-
 		return *this;
 	}
 
@@ -703,16 +663,13 @@ namespace AIS
 		setName("FM discriminator output model");
 
 		device = dev;
-		const int nSymbolsPerSample = 48000 / 9600;
+		const int N_SAMPLES_PER_SYMBOL = 48000 / 9600;
 
 		FR_a.setTaps(Filters::Receiver);
 		FR_b.setTaps(Filters::Receiver);
 
-		S_a.setConnections(nSymbolsPerSample);
-		S_b.setConnections(nSymbolsPerSample);
-
-		DEC_a.resize(nSymbolsPerSample);
-		DEC_b.resize(nSymbolsPerSample);
+		S_a.setConnections(N_SAMPLES_PER_SYMBOL);
+		S_b.setConnections(N_SAMPLES_PER_SYMBOL);
 
 		Connection<RAW> &physical = timerOn ? (*device >> timer).out : device->out;
 
@@ -735,7 +692,7 @@ namespace AIS
 		FR_a >> S_a;
 		FR_b >> S_b;
 
-		for (int i = 0; i < nSymbolsPerSample; i++)
+		for (int i = 0; i < N_SAMPLES_PER_SYMBOL; i++)
 		{
 			S_a.out[i] >> DEC_a[i] >> output;
 			S_b.out[i] >> DEC_b[i] >> output;
@@ -743,7 +700,7 @@ namespace AIS
 			DEC_a[i].setOrigin(CH1, station, own_mmsi);
 			DEC_b[i].setOrigin(CH2, station, own_mmsi);
 
-			for (int j = 0; j < nSymbolsPerSample; j++)
+			for (int j = 0; j < N_SAMPLES_PER_SYMBOL; j++)
 			{
 				if (i != j)
 				{
@@ -768,42 +725,35 @@ namespace AIS
 		nmea.setOwnMMSI(own_mmsi);
 	}
 
-	Setting &ModelNMEA::Set(std::string option, std::string arg)
+	Setting &ModelNMEA::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-		// Util::Convert::toUpper(arg);
-
-		if (option == "NMEA_REFRESH")
+		switch (key)
 		{
+		case AIS::KEY_SETTING_NMEA_REFRESH:
 			nmea.setRegenerate(Util::Parse::Switch(arg));
-		}
-		else if (option == "STAMP")
-		{
+			break;
+		case AIS::KEY_SETTING_STAMP:
 			nmea.setStamp(Util::Parse::Switch(arg));
-		}
-		else if (option == "CRC_CHECK")
-		{
+			break;
+		case AIS::KEY_SETTING_CRC_CHECK:
 			nmea.setCRCcheck(Util::Parse::Switch(arg));
-		}
-		else if (option == "VDO")
-		{
+			break;
+		case AIS::KEY_SETTING_VDO:
 			nmea.setVDO(Util::Parse::Switch(arg));
-		}
-		else if (option == "UUID")
-		{
+			break;
+		case AIS::KEY_SETTING_UUID:
 			nmea.setUUID(arg);
-		}
-		else if (option == "WARNINGS")
-		{
+			break;
+		case AIS::KEY_SETTING_WARNINGS:
 			nmea.setWarnings(Util::Parse::Switch(arg));
-		}
-		else if (option == "GPS")
-		{
+			break;
+		case AIS::KEY_SETTING_GPS:
 			nmea.setGPS(Util::Parse::Switch(arg));
+			break;
+		default:
+			Model::SetKey(key, arg);
+			break;
 		}
-		else
-			Model::Set(option, arg);
-
 		return *this;
 	}
 
@@ -829,12 +779,9 @@ namespace AIS
 		physical >> n2k >> output;
 	}
 
-	Setting &ModelN2K::Set(std::string option, std::string arg)
+	Setting &ModelN2K::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		Model::Set(option, arg);
-		return *this;
+		return Model::SetKey(key, arg);
 	}
 
 	std::string ModelN2K::Get()
@@ -850,13 +797,9 @@ namespace AIS
 		physical >> model >> outputADSB;
 	}
 
-	Setting &ModelBaseStation::Set(std::string option, std::string arg)
+	Setting &ModelBaseStation::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		Model::Set(option, arg);
-
-		return *this;
+		return Model::SetKey(key, arg);
 	}
 
 	std::string ModelBaseStation::Get()
@@ -872,13 +815,9 @@ namespace AIS
 		physical >> model >> outputADSB;
 	}
 
-	Setting &ModelBeast::Set(std::string option, std::string arg)
+	Setting &ModelBeast::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		Model::Set(option, arg);
-
-		return *this;
+		return Model::SetKey(key, arg);
 	}
 
 	std::string ModelBeast::Get()
@@ -894,13 +833,9 @@ namespace AIS
 		physical >> model >> outputADSB;
 	}
 
-	Setting &ModelRAW1090::Set(std::string option, std::string arg)
+	Setting &ModelRAW1090::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		Util::Convert::toUpper(option);
-
-		Model::Set(option, arg);
-
-		return *this;
+		return Model::SetKey(key, arg);
 	}
 
 	std::string ModelRAW1090::Get()
@@ -908,12 +843,9 @@ namespace AIS
 		return Model::Get();
 	}
 
-	Setting &ModelExport::Set(std::string option, std::string arg)
+	Setting &ModelExport::SetKey(AIS::Keys key, const std::string &arg)
 	{
-		if (!wav.setValue(option, arg))
-			Model::Set(option, arg);
-
-		return *this;
+		return Model::SetKey(key, arg);
 	}
 
 	std::string ModelExport::Get()
@@ -926,7 +858,7 @@ namespace AIS
 		setName("Export output");
 		device = dev;
 
-		wav.setValue("rate", std::to_string(sample_rate));
+		wav.setOptionKey(AIS::KEY_SETTING_SAMPLE_RATE, std::to_string(sample_rate));
 
 		Connection<RAW> &physical = timerOn ? (*device >> timer).out : device->out;
 		physical >> wav;
