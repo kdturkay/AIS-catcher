@@ -53,14 +53,4 @@ namespace JSON {
 		if (esc) json += '\"';
 	}
 
-	void append_uint(std::string &out, unsigned long long v)
-	{
-		char buf[20];
-		char *p = buf + sizeof(buf);
-		do {
-			*--p = (char)('0' + (int)(v % 10));
-			v /= 10;
-		} while (v);
-		out.append(p, (buf + sizeof(buf)) - p);
-	}
 }

@@ -202,7 +202,7 @@ namespace JSON
 			return nullptr;
 		}
 
-		const Value *operator[](int p) { return getValue(p); }
+		const Value *operator[](int p) const { return getValue(p); }
 
 		void Add(int p, int v)
 		{

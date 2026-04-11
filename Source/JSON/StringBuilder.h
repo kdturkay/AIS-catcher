@@ -44,9 +44,6 @@ namespace JSON
 		return s;
 	}
 
-	// Direct-to-string unsigned formatter (no std::to_string temporary).
-	void append_uint(std::string &out, unsigned long long v);
-
 	// Fast writer that owns raw ptr/end cursors into a std::string sink and
 	// grows the backing string on demand. Hot path is a single-branch byte
 	// write — same speed as a fixed char buffer, but with no truncation risk.
@@ -329,12 +326,6 @@ namespace JSON
 
 		// Runtime overload: only used when length is genuinely unknown.
 		inline void append_lit(const char *s) { append(s, strlen(s)); }
-
-		void append_uint(unsigned long long v)
-		{
-			reserve_more(20);
-			put_uint_raw(v);
-		}
 
 		void append_int(long long v)
 		{
