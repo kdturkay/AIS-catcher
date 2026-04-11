@@ -140,7 +140,7 @@ namespace JSON
 			p++;
 			break;
 		case 't':
-			if (p + 4 <= pend && memcmp(p + 1, "rue", 3) == 0)
+			if (p + 4 <= pend && memcmp(p, "true", 4) == 0)
 			{
 				currentType = TokenType::True;
 				tokenStart = p;
@@ -151,7 +151,7 @@ namespace JSON
 				error("illegal identifier", (int)(p - p_start));
 			break;
 		case 'f':
-			if (p + 5 <= pend && memcmp(p + 1, "alse", 4) == 0)
+			if (p + 5 <= pend && memcmp(p, "false", 5) == 0)
 			{
 				currentType = TokenType::False;
 				tokenStart = p;
@@ -162,7 +162,7 @@ namespace JSON
 				error("illegal identifier", (int)(p - p_start));
 			break;
 		case 'n':
-			if (p + 4 <= pend && memcmp(p + 1, "ull", 3) == 0)
+			if (p + 4 <= pend && memcmp(p, "null", 4) == 0)
 			{
 				currentType = TokenType::Null;
 				tokenStart = p;
