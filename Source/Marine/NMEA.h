@@ -51,14 +51,12 @@ namespace AIS
 		{
 			std::string sentence;
 			uint64_t timestamp = 0;
-			uint32_t match_key = 0; // (talkerID << 16) | (talkerID2 << 8) | channel
+			uint32_t match_key = 0; // groupId: (1<<31)|gid, else: (t1<<24)|(t2<<16)|(ch<<8)|(count<<4)|ID
 			uint32_t message_error = 0;
-			int groupId = 0; // NMEA 4.0 tag block group ID
 			uint16_t data_offset = 0;
 			uint16_t data_len = 0;
 			uint8_t count = 0;
 			uint8_t number = 0;
-			uint8_t ID = 0;
 			uint8_t fillbits = 0;
 
 			void reset()
@@ -67,22 +65,19 @@ namespace AIS
 				timestamp = time(nullptr);
 				match_key = 0;
 				message_error = 0;
-				groupId = 0;
 				data_offset = 0;
 				data_len = 0;
 				count = 0;
 				number = 0;
-				ID = 0;
 				fillbits = 0;
 			}
 
-			char channel() const { return (char)(match_key & 0xFF); }
+			char channel() const { return (char)((match_key >> 8) & 0xFF); }
 		} aivdm;
 
 		static bool matches(const AIVDM &a, const AIVDM &b)
 		{
-			return (a.groupId != 0 && a.groupId == b.groupId) ||
-				   (a.groupId == 0 && a.match_key == b.match_key);
+			return a.match_key == b.match_key;
 		}
 
 		// Zero-allocation field splitter: stores delimiter positions into source string
@@ -126,7 +121,7 @@ namespace AIS
 		std::vector<AIVDM> queue;
 
 		void initMsg(char channel, int src);
-		void dispatchAIS(TAG &tag);
+		void assembleAIS(TAG &tag);
 		void addline(const AIVDM &a);
 		void reset();
 		void clean(const AIVDM &ref);

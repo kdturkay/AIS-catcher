@@ -24,8 +24,6 @@
 namespace AIS
 {
 
-	const std::string empty;
-
 	void NMEA::reset()
 	{
 		state = ParseState::FIND_START;
@@ -38,7 +36,7 @@ namespace AIS
 		uint64_t now = time(nullptr);
 		while (i != queue.end())
 		{
-			if (matches(ref, *i) || (i->timestamp + 3 < now))
+			if ((ref.match_key & 0xFFFFFF00) == (i->match_key & 0xFFFFFF00) || (i->timestamp + 3 < now))
 				i = queue.erase(i);
 			else
 				i++;
@@ -47,20 +45,10 @@ namespace AIS
 
 	int NMEA::search()
 	{
-		// return: 0 = Not Found, -1: Found but inconsistent, >0: number of last queued part
-		int lastNumber = 0;
 		for (auto it = queue.rbegin(); it != queue.rend(); it++)
-		{
 			if (matches(aivdm, *it))
-			{
-				if (it->count != aivdm.count || it->ID != aivdm.ID)
-					lastNumber = -1;
-				else
-					lastNumber = it->number;
-				break;
-			}
-		}
-		return lastNumber;
+				return it->number;
+		return 0;
 	}
 
 	void NMEA::initMsg(char channel, int src)
@@ -76,7 +64,7 @@ namespace AIS
 		msg.setOrigin(channel, src, own_mmsi);
 	}
 
-	void NMEA::dispatchAIS(TAG &tag)
+	void NMEA::assembleAIS(TAG &tag)
 	{
 		int src = (mctx.station == -1) ? station : mctx.station;
 
@@ -101,7 +89,7 @@ namespace AIS
 
 		for (auto &it : queue)
 		{
-			if (matches(aivdm, it) && it.count == aivdm.count && it.ID == aivdm.ID)
+			if (matches(aivdm, it))
 			{
 				tag.error |= it.message_error;
 				addline(it);
@@ -113,7 +101,7 @@ namespace AIS
 		if (msg.validate())
 		{
 			if (cfg_regenerate)
-				msg.buildNMEA(tag, aivdm.ID);
+				msg.buildNMEA(tag, aivdm.match_key & 0x0F);
 			Send(&msg, 1, tag);
 		}
 		else if (cfg_warnings)
@@ -324,7 +312,7 @@ namespace AIS
 		bool error = false;
 		GPS gps(GpsToDecimal(partPtr(lat_idx), partLen(lat_idx), partAt(ns_idx, 0), error),
 				GpsToDecimal(partPtr(lon_idx), partLen(lon_idx), partAt(ew_idx, 0), error),
-				s, empty);
+				s, std::string());
 
 		if (error)
 		{
@@ -456,20 +444,24 @@ namespace AIS
 
 		// Multi-part: construct aivdm and hand off to fragment assembler
 		aivdm.reset();
-		aivdm.match_key = ((uint32_t)(uint8_t)t1 << 16) | ((uint32_t)(uint8_t)t2 << 8) | (uint8_t)channel_ch;
 		aivdm.count = p[7] - '0';
 		aivdm.number = p[9] - '0';
-		aivdm.ID = id_ch ? (id_ch - '0') : 0;
+		uint8_t id = id_ch ? (id_ch - '0') : 0;
+
+		if (mctx.groupId != 0)
+			aivdm.match_key = (1u << 31) | (uint32_t)mctx.groupId;
+		else
+			aivdm.match_key = ((uint32_t)(uint8_t)t1 << 24) | ((uint32_t)(uint8_t)t2 << 16) | ((uint32_t)(uint8_t)channel_ch << 8) | ((uint32_t)aivdm.count << 4) | id;
+
 		aivdm.data_offset = (int)(q - str.data());
 		aivdm.data_len = (int)(payload_end - q);
 		aivdm.fillbits = fillbits;
 		aivdm.message_error = message_error;
-		aivdm.groupId = mctx.groupId;
 
 		splitChecksum = cs;
 		aivdm.sentence = str;
 
-		dispatchAIS(tag);
+		assembleAIS(tag);
 		return true;
 	}
 
@@ -616,7 +608,7 @@ namespace AIS
 
 			if (cls == CLS_TPV && cfg_GPS && has_tpv_coords && (tpv_lat != 0 || tpv_lon != 0))
 			{
-				GPS gps(tpv_lat, tpv_lon, empty, line);
+				GPS gps(tpv_lat, tpv_lon, std::string(), line);
 				outGPS.Send(&gps, 1, tag);
 			}
 		}
