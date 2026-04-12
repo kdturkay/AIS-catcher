@@ -23,7 +23,7 @@
 namespace AIS
 {
 	// Generated from KeyDefs.h
-	const char* const KeyMap[][JSON_DICT_COLUMNS] = {
+	const std::string KeyMap[][JSON_DICT_COLUMNS] = {
 #define X(name, full, minimal, sparse, aprs, setting, input, unit, desc, lookup) {full, minimal, sparse, aprs, setting, input},
 #include "KeyDefs.h"
 #undef X

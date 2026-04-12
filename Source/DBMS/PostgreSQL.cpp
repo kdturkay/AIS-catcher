@@ -275,10 +275,10 @@ namespace IO
 					}
 					first = false;
 
-					const char *name = AIS::KeyMap[kv.key][JSON_DICT_FULL];
+					const std::string &name = AIS::KeyMap[kv.key][JSON_DICT_FULL];
 					cols += name;
 					placeholders += "$" + std::to_string(idx++);
-					on_conflict += std::string(name) + "=EXCLUDED." + name;
+					on_conflict += name + "=EXCLUDED." + name;
 					params.push_back(kv.value.c_str());
 					break;
 				}

@@ -514,36 +514,46 @@ namespace JSON
 			return v == sentinel ? val_null() : val(v);
 		}
 
-		Writer &kv(const char *k, long long v)
+		// Key reference — captures pointer + length at the call site.
+		// Literal keys deduce length at compile time via the array ctor,
+		// eliminating runtime strlen on the hot serializer path.
+		struct KeyRef
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 25); // sep + key + sign + 20 digits
+			const char *p;
+			size_t n;
+			KeyRef(const char *s) : p(s), n(strlen(s)) {}
+			template <size_t N>
+			KeyRef(const char (&s)[N]) : p(s), n(N - 1) {}
+			KeyRef(const std::string &s) : p(s.data()), n(s.size()) {}
+		};
+
+		Writer &kv(KeyRef k, long long v)
+		{
+			reserve_more(k.n + 25); // sep + key + sign + 20 digits
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			put_int_raw(v);
 			need_sep = true;
 			return *this;
 		}
-		Writer &kv(const char *k, int v) { return kv(k, (long long)v); }
-		Writer &kv(const char *k, long v) { return kv(k, (long long)v); }
-		Writer &kv(const char *k, unsigned long long v)
+		Writer &kv(KeyRef k, int v) { return kv(k, (long long)v); }
+		Writer &kv(KeyRef k, long v) { return kv(k, (long long)v); }
+		Writer &kv(KeyRef k, unsigned long long v)
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 24); // sep + key + 20 digits
+			reserve_more(k.n + 24); // sep + key + 20 digits
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			put_uint_raw(v);
 			need_sep = true;
 			return *this;
 		}
-		Writer &kv(const char *k, unsigned v) { return kv(k, (unsigned long long)v); }
-		Writer &kv(const char *k, unsigned long v) { return kv(k, (unsigned long long)v); }
-		Writer &kv(const char *k, double v)
+		Writer &kv(KeyRef k, unsigned v) { return kv(k, (unsigned long long)v); }
+		Writer &kv(KeyRef k, unsigned long v) { return kv(k, (unsigned long long)v); }
+		Writer &kv(KeyRef k, double v)
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 32); // sep + key + sign + 20 + '.' + 6
+			reserve_more(k.n + 32); // sep + key + sign + 20 + '.' + 6
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			// Single range-check catches NaN, ±Inf, and |v| >= 1e18 in one
 			// branch — see append_float() for rationale.
 			if (!(v > -1e18 && v < 1e18))
@@ -553,25 +563,23 @@ namespace JSON
 			need_sep = true;
 			return *this;
 		}
-		Writer &kv(const char *k, float v) { return kv(k, (double)v); }
-		Writer &kv(const char *k, const char *s, size_t n)
+		Writer &kv(KeyRef k, float v) { return kv(k, (double)v); }
+		Writer &kv(KeyRef k, const char *s, size_t n)
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 4 + 1 + n * 6 + 2); // key + sep + escaped value
+			reserve_more(k.n + 4 + 1 + n * 6 + 2); // key + sep + escaped value
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			put_string_escaped_raw(s, n);
 			need_sep = true;
 			return *this;
 		}
 		// Two-piece string value, no temporary allocation. Both pieces are
 		// escaped into the same "..." literal.
-		Writer &kv(const char *k, const char *s1, size_t n1, const char *s2, size_t n2)
+		Writer &kv(KeyRef k, const char *s1, size_t n1, const char *s2, size_t n2)
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 4 + 1 + (n1 + n2) * 6 + 2);
+			reserve_more(k.n + 4 + 1 + (n1 + n2) * 6 + 2);
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			*ptr++ = '"';
 			put_string_escaped_body_raw(s1, n1);
 			put_string_escaped_body_raw(s2, n2);
@@ -581,29 +589,24 @@ namespace JSON
 		}
 		// Fixed-size null-terminated buffer overloads — see val() above.
 		template <size_t N>
-		Writer &kv(const char *k, const char (&s)[N])
+		Writer &kv(KeyRef k, const char (&s)[N])
 		{
 			return kv(k, s, strnlen(s, N - 1));
 		}
 		template <size_t N>
-		Writer &kv(const char *k, const char (&s)[N], const char *suffix, size_t suffix_n)
+		Writer &kv(KeyRef k, const char (&s)[N], const char *suffix, size_t suffix_n)
 		{
 			return kv(k, s, strnlen(s, N - 1), suffix, suffix_n);
 		}
-		Writer &kv(const char *k, const std::string &v)
+		Writer &kv(KeyRef k, const std::string &v)
 		{
 			return kv(k, v.data(), v.size());
 		}
-		Writer &kv(const char *k, const char *v)
+		Writer &kv(KeyRef k, bool v)
 		{
-			return kv(k, v, strlen(v));
-		}
-		Writer &kv(const char *k, bool v)
-		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 9); // sep + key + "false"
+			reserve_more(k.n + 9); // sep + key + "false"
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			if (v)
 				put_bytes("true", 4);
 			else
@@ -611,12 +614,11 @@ namespace JSON
 			need_sep = true;
 			return *this;
 		}
-		Writer &kv_null(const char *k)
+		Writer &kv_null(KeyRef k)
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 8); // sep + key + 'null'
+			reserve_more(k.n + 8); // sep + key + 'null'
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			put_bytes("null", 4);
 			need_sep = true;
 			return *this;
@@ -624,35 +626,33 @@ namespace JSON
 		// Writes kv(k, v) unless v equals sentinel, in which case writes
 		// kv_null(k). Mirror of val_unless for keyed objects.
 		template <typename T, typename U>
-		Writer &kv_unless(const char *k, T v, U sentinel)
+		Writer &kv_unless(KeyRef k, T v, U sentinel)
 		{
 			return v == sentinel ? kv_null(k) : kv(k, v);
 		}
 
 		// Writes "key":raw  — caller-supplied raw must be valid JSON.
-		Writer &kv_raw(const char *k, const char *raw, size_t rawlen)
+		Writer &kv_raw(KeyRef k, const char *raw, size_t rawlen)
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 4 + rawlen);
+			reserve_more(k.n + 4 + rawlen);
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			put_bytes(raw, rawlen);
 			need_sep = true;
 			return *this;
 		}
-		Writer &kv_raw(const char *k, const std::string &raw)
+		Writer &kv_raw(KeyRef k, const std::string &raw)
 		{
 			return kv_raw(k, raw.data(), raw.size());
 		}
 
 		// Writes "key": and leaves cursor positioned for the next val/raw write.
 		// need_sep is cleared so the following val() does not emit a comma.
-		Writer &key(const char *k)
+		Writer &key(KeyRef k)
 		{
-			size_t klen = strlen(k);
-			reserve_more(klen + 4);
+			reserve_more(k.n + 4);
 			put_sep_raw();
-			put_kvkey_raw(k, klen);
+			put_kvkey_raw(k.p, k.n);
 			need_sep = false;
 			return *this;
 		}
@@ -768,8 +768,8 @@ namespace JSON
 			{
 				if (p.Key() < 0 || p.Key() >= AIS::KEY_COUNT)
 					continue;
-				const char *key = AIS::KeyMap[p.Key()][dict];
-				if (key[0] == '\0')
+				const std::string &key = AIS::KeyMap[p.Key()][dict];
+				if (key.empty())
 					continue;
 
 				w.key(key);
