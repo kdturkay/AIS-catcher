@@ -41,7 +41,7 @@ namespace AIS
 			: unit(u), description(d), lookup_table(lt) {}
 	};
 
-	extern const char* const KeyMap[][JSON_DICT_COLUMNS];
+	extern const std::string KeyMap[][JSON_DICT_COLUMNS];
 	extern const KeyInfo KeyInfoMap[];
 	extern const std::vector<std::string> LookupTable_aid_types;
 	extern const std::vector<std::string> LookupTable_dte_types;

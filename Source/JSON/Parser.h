@@ -47,8 +47,12 @@ namespace JSON
 		int find(uint32_t h, const char *str, int len) const
 		{
 			int v = slots[(int)(h % SIZE)];
-			if (v >= 0 && ((int)strlen(AIS::KeyMap[v][JSON_DICT_INPUT]) != len || memcmp(AIS::KeyMap[v][JSON_DICT_INPUT], str, len) != 0))
-				return -1;
+			if (v >= 0)
+			{
+				const std::string &k = AIS::KeyMap[v][JSON_DICT_INPUT];
+				if ((int)k.size() != len || memcmp(k.data(), str, len) != 0)
+					return -1;
+			}
 			return v;
 		}
 	};
@@ -122,11 +126,11 @@ namespace JSON
 				keyLookup.slots[i] = -1;
 
 			for (int i = 0; i < AIS::KEY_COUNT; i++)
-				if (AIS::KeyMap[i][JSON_DICT_INPUT][0] != '\0')
-				{
-					const char *key = AIS::KeyMap[i][JSON_DICT_INPUT];
-					keyLookup.insert(hashRange(key, strlen(key)), i);
-				}
+			{
+				const std::string &key = AIS::KeyMap[i][JSON_DICT_INPUT];
+				if (!key.empty())
+					keyLookup.insert(hashRange(key.data(), key.size()), i);
+			}
 
 			keyLookup.built = true;
 		}
@@ -138,8 +142,8 @@ namespace JSON
 
 			for (int i = 0; i < AIS::KEY_COUNT; i++)
 			{
-				const char *key = AIS::KeyMap[i][dict];
-				if (key[0] != '\0' && (int)strlen(key) == slen && memcmp(key, str, slen) == 0)
+				const std::string &key = AIS::KeyMap[i][dict];
+				if (!key.empty() && (int)key.size() == slen && memcmp(key.data(), str, slen) == 0)
 					return i;
 			}
 			return -1;

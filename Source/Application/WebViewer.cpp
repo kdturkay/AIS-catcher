@@ -210,19 +210,19 @@ void SSEStreamer::Receive(const JSON::JSON *data, int len, TAG &tag)
 		std::time_t now = std::time(nullptr);
 		char channel = m->getChannel();
 
-		if (!m->NMEA.empty())
+		if (!m->sentences().empty())
 		{
 			std::string json;
 			JSON::Writer w(json);
 			w.beginObject()
 				.kv("mmsi", m->mmsi())
 				.kv("timestamp", (long long)now)
-				.kv("channel", &channel, 1)
+				.kv("channel", {&channel, 1})
 				.kv("type", m->type())
 				.kv("shipname", tag.shipname)
 				.key("nmea").beginArray();
 
-			for (const auto &s : m->NMEA)
+			for (const auto &s : m->sentences())
 			{
 				std::string nmea = s;
 
@@ -248,7 +248,7 @@ void SSEStreamer::Receive(const JSON::JSON *data, int len, TAG &tag)
 					}
 				}
 
-				w.val(nmea.data(), nmea.size());
+				w.val(nmea);
 			}
 			w.endArray();
 			w.endObject();
@@ -262,7 +262,7 @@ void SSEStreamer::Receive(const JSON::JSON *data, int len, TAG &tag)
 			JSON::Writer w(json);
 			w.beginObject()
 				.kv("mmsi", m->mmsi())
-				.kv("channel", &channel, 1)
+				.kv("channel", {&channel, 1})
 				.kv("lat", tag.lat)
 				.kv("lon", tag.lon)
 				.endObject();
