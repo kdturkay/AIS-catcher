@@ -142,6 +142,10 @@ public:
 	void connectJSON(Connection<JSON::JSON> &c) { c.Connect((StreamIn<JSON::JSON> *)&ships); }
 	void connectGPS(Connection<AIS::GPS> &c) { c.Connect((StreamIn<AIS::GPS> *)&ships); }
 
+	// Mark ships as cross-thread sink (multiple device threads feeding it).
+	// Locking ships also serializes the synchronous cascade into hist_*/counter.
+	void setExclusive() { ships.setExclusive(true); }
+
 	// Connect outgoing sinks (ships as source)
 	template <typename T>
 	void connectSink(T &sink) { ships >> sink; }

@@ -775,6 +775,18 @@ void WebViewer::connect(const std::vector<std::unique_ptr<Receiver>> &receivers)
 	for (auto &s : states)
 		s->applyConfig(tracking, filter);
 
+	if (receivers.size() > 1)
+	{
+		Debug() << "Mutex: WebViewer enabling exclusive on states[0]/raw_counter/planes (" << receivers.size() << " receivers)";
+		states[0]->setExclusive();
+		raw_counter.setExclusive(true);
+		planes.setExclusive(true);
+	}
+	else
+	{
+		Debug() << "Mutex: WebViewer single receiver, all sinks lock-free";
+	}
+
 	raw_counter.setFilter(filter);
 }
 

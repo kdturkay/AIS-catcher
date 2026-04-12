@@ -369,6 +369,18 @@ static void run(RunState &state)
 			state.stat[i].connect(r);
 	}
 
+	if (state.receivers.size() > 1)
+	{
+		Debug() << "Mutex: enabling exclusive on " << state.msg.size() << " message outputs + screen (" << state.receivers.size() << " receivers)";
+		for (auto &o : state.msg)
+			o->setExclusive(true);
+		state.screen.setExclusive(true);
+	}
+	else
+	{
+		Debug() << "Mutex: single receiver, all sinks lock-free";
+	}
+
 	for (auto &s : state.servers)
 		if (s->active())
 			s->connect(state.receivers);

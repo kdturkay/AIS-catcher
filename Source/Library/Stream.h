@@ -23,11 +23,19 @@
 
 #include "Common.h"
 
-template <typename T>
-class StreamIn {
-	uint64_t groups_in = GROUPS_ALL;
-	int producer_count = 0;
+class StreamInBase {
+protected:
 	std::mutex mtx;
+	bool exclusive = false;
+
+public:
+	virtual ~StreamInBase() {}
+	void setExclusive(bool b = true) { exclusive = b; }
+};
+
+template <typename T>
+class StreamIn : public virtual StreamInBase {
+	uint64_t groups_in = GROUPS_ALL;
 
 public:
 	virtual ~StreamIn() {}
@@ -36,10 +44,8 @@ public:
 		Receive((const T*)data, len, tag);
 	}
 
-	void addProducer() { producer_count++; }
-
 	void ReceiveSafe(const T* data, int len, TAG& tag) {
-		if (producer_count > 1) {
+		if (exclusive) {
 			std::lock_guard<std::mutex> lock(mtx);
 			Receive(data, len, tag);
 		}
@@ -49,7 +55,7 @@ public:
 	}
 
 	void ReceiveSafe(T* data, int len, TAG& tag) {
-		if (producer_count > 1) {
+		if (exclusive) {
 			std::lock_guard<std::mutex> lock(mtx);
 			Receive(data, len, tag);
 		}
@@ -88,7 +94,6 @@ public:
 
 	void Connect(StreamIn<S>* s) {
 		connections.push_back(s);
-		s->addProducer();
 	}
 
 	void setGroupOut(uint32_t g) { groups = g; }
