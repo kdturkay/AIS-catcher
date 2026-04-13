@@ -19,6 +19,7 @@
 #include "Parse.h"
 #include "Convert.h"
 #include "Helper.h"
+#include "SWAR.h"
 #include <cmath>
 
 namespace AIS
@@ -107,10 +108,8 @@ namespace AIS
 				msg.buildNMEA(tag, aivdm.match_key & 0x0F);
 			Send(&msg, 1, tag);
 		}
-		else if (shouldWarn(WARN_INVALID_MSG))
-		{
-			Warning() << "NMEA: invalid message of type " << msg.type() << " and length " << msg.getLength() << " from station " << src;
-		}
+		else
+			warnAIS(WARN_INVALID_MSG, "invalid message", aivdm.sentence);
 
 		clean(aivdm);
 	}
@@ -120,33 +119,6 @@ namespace AIS
 		msg.appendPayload(a.sentence.data() + a.data_offset, a.data_len);
 		if (a.count == a.number)
 			msg.reduceLength(a.fillbits);
-	}
-
-	// SWAR helpers
-	static constexpr size_t SWAR_ONES = ~(size_t)0 / 255;
-	static constexpr size_t SWAR_HIGHS = SWAR_ONES * 128;
-
-	static constexpr size_t swar_mask(char target)
-	{
-		return SWAR_ONES * (unsigned char)target;
-	}
-
-	static inline size_t has_byte(size_t word, size_t mask)
-	{
-		size_t v = word ^ mask;
-		return (v - SWAR_ONES) & ~v & SWAR_HIGHS;
-	}
-
-#define C(ch) has_byte(word, swar_mask(ch))
-
-#define SWAR_SKIP(buf, i, limit, condition)         \
-	while ((i) + (int)sizeof(size_t) <= (limit))    \
-	{                                               \
-		size_t word;                                \
-		memcpy(&word, (buf) + (i), sizeof(size_t)); \
-		if (condition)                              \
-			break;                                  \
-		(i) += sizeof(size_t);                      \
 	}
 
 	void NMEA::split(const std::string &s, size_t offset /*= 0*/)
@@ -162,8 +134,8 @@ namespace AIS
 		// and accumulate XOR checksum, while recording comma positions
 		size_t cs_accum = 0;
 		const char *p = ptr;
-		constexpr size_t mask_star = swar_mask('*');
-		constexpr size_t mask_comma = swar_mask(',');
+		constexpr size_t mask_star = SWAR::mask('*');
+		constexpr size_t mask_comma = SWAR::mask(',');
 
 		// Process size_t-aligned chunks
 		while (p + sizeof(size_t) <= end && splitCount < 16)
@@ -172,14 +144,14 @@ namespace AIS
 			memcpy(&word, p, sizeof(size_t));
 
 			// Check for '*' in this word
-			if (has_byte(word, mask_star))
+			if (SWAR::has_byte(word, mask_star))
 				break;
 
 			// Accumulate checksum (all bytes before '*')
 			cs_accum ^= word;
 
 			// Check for commas in this word
-			if (has_byte(word, mask_comma))
+			if (SWAR::has_byte(word, mask_comma))
 			{
 				for (size_t j = 0; j < sizeof(size_t) && splitCount < 16; j++)
 				{
@@ -334,7 +306,7 @@ namespace AIS
 			return false;
 
 		const char *p = str.data();
-		int len = (int)str.size();
+		const int len = (int)str.size();
 
 		if (memcmp(p + 3, "VDM", 3) != 0 && memcmp(p + 3, "VDO", 3) != 0)
 			return true;
@@ -342,14 +314,13 @@ namespace AIS
 		char t1 = p[1], t2 = p[2];
 		if (!(t1 >= 'A' && t1 <= 'Z') || (!(t2 >= 'A' && t2 <= 'Z') && !(t2 >= '0' && t2 <= '9')))
 		{
-			if (shouldWarn(WARN_AIS_TALKER))
-				Warning() << "AIS: invalid talker ID [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_AIS_TALKER, "invalid talker ID", str);
 			return false;
 		}
+		
 		if (p[6] != ',' || p[8] != ',' || p[10] != ',' || p[7] < '1' || p[7] > '9' || p[9] < '1' || p[9] > '9')
 		{
-			if (shouldWarn(WARN_AIS_HEADER))
-				Warning() << "AIS: malformed header [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_AIS_HEADER, "malformed header", str);
 			return false;
 		}
 
@@ -357,16 +328,14 @@ namespace AIS
 		const char *end = p + len;
 		if (!isHexDigit(end[-1]) || !isHexDigit(end[-2]) || end[-3] != '*' || end[-5] != ',')
 		{
-			if (shouldWarn(WARN_AIS_TAIL))
-				Warning() << "AIS: malformed tail [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_AIS_TAIL, "malformed tail", str);
 			return false;
 		}
 		int checksum = (hexDigitValue(end[-2]) << 4) | hexDigitValue(end[-1]);
 		char fillbits_ch = end[-4];
 		if (fillbits_ch < '0' || fillbits_ch > '5')
 		{
-			if (shouldWarn(WARN_AIS_FILLBITS))
-				Warning() << "AIS: invalid fillbits [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_AIS_FILLBITS, "invalid fillbits", str);
 			return false;
 		}
 
@@ -377,8 +346,7 @@ namespace AIS
 			id_ch = *q++;
 		if (*q != ',')
 		{
-			if (shouldWarn(WARN_AIS_ID))
-				Warning() << "AIS: invalid ID field [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_AIS_ID, "invalid ID field", str);
 			return false;
 		}
 		q++;
@@ -388,8 +356,7 @@ namespace AIS
 			channel_ch = *q++;
 		if (*q != ',')
 		{
-			if (shouldWarn(WARN_AIS_CHANNEL))
-				Warning() << "AIS: invalid channel field [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_AIS_CHANNEL, "invalid channel field", str);
 			return false;
 		}
 		q++;
@@ -397,30 +364,45 @@ namespace AIS
 		const char *payload_end = end - 5;
 		if (q > payload_end)
 		{
-			if (shouldWarn(WARN_AIS_PAYLOAD))
-				Warning() << "AIS: empty payload [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_AIS_PAYLOAD, "empty payload", str);
 			return false;
 		}
 
+		// Valid AIS payload bytes: [0x30..0x57] or [0x60..0x77]. Bitwise | (not ||)
+		// keeps this branchless so GCC can auto-vectorize.
 		for (const char *r = q; r < payload_end; r++)
 		{
-			unsigned char c = (unsigned char)*r;
-			if (!((c >= '0' && c <= 'W') || (c >= '`' && c <= 'w')))
+			unsigned c = (unsigned char)*r;
+			unsigned ok = ((c - '0') < 0x28u) | ((c - '`') < 0x18u);
+			if (!ok)
 			{
-				if (shouldWarn(WARN_AIS_PAYLOAD))
-				{
-					if (c == ',')
-						Warning() << "AIS: too many parts [" << str.substr(0, 20) << "...]";
-					else
-						Warning() << "AIS: invalid payload character '" << (char)c << "' [" << str.substr(0, 20) << "...]";
-				}
+				if (c == ',')
+					warnAIS(WARN_AIS_PAYLOAD, "too many parts", str);
+				else
+					warnAIS(WARN_AIS_PAYLOAD, "invalid payload character", str);
 				return false;
 			}
 		}
 
-		int cs = 0;
-		for (const char *r = p + 1; r < end - 3; r++)
-			cs ^= *r;
+		// SWAR XOR checksum over [p+1, end-3).
+		size_t cs_acc = 0;
+		const char *r = p + 1;
+		const char *cs_end = end - 3;
+		while (r + sizeof(size_t) <= cs_end)
+		{
+			size_t w;
+			memcpy(&w, r, sizeof(w));
+			cs_acc ^= w;
+			r += sizeof(size_t);
+		}
+
+		if (sizeof(size_t) == 8)
+			cs_acc ^= cs_acc >> 32;
+		cs_acc ^= cs_acc >> 16;
+		cs_acc ^= cs_acc >> 8;
+		int cs = (int)(cs_acc & 0xFF);
+		while (r < cs_end)
+			cs ^= *r++;
 
 		int src = (mctx.station == -1) ? station : mctx.station;
 		int fillbits = fillbits_ch - '0';
@@ -428,8 +410,7 @@ namespace AIS
 
 		if (checksum != cs)
 		{
-			if (shouldWarn(WARN_NMEA_CHECKSUM))
-				Warning() << "AIS: checksum mismatch [" << str.substr(0, 20) << "...]";
+			warnAIS(WARN_NMEA_CHECKSUM, "checksum mismatch", str);
 			if (cfg_crc_check)
 				return true;
 			message_error = MESSAGE_ERROR_NMEA_CHECKSUM;
@@ -455,10 +436,8 @@ namespace AIS
 				}
 				Send(&msg, 1, tag);
 			}
-			else if (shouldWarn(WARN_INVALID_MSG))
-			{
-				Warning() << "NMEA: invalid message of type " << msg.type() << " and length " << msg.getLength() << " from station " << src;
-			}
+			else
+				warnAIS(WARN_INVALID_MSG, "invalid message", str);
 			return true;
 		}
 
@@ -961,47 +940,33 @@ namespace AIS
 
 	void NMEA::findStart()
 	{
-		// Skip whitespace/line-ending characters
-		while (pos < bufsize)
-		{
-			char c = buf[pos];
-			if (c == '\r' || c == '\n' || c == '\t' || c == ' ' || c == '\0')
-				pos++;
-			else
-				break;
-		}
+		while (pos < bufsize && (unsigned char)buf[pos] <= ' ')
+			pos++;
 		if (pos >= bufsize)
 			return;
 
-		// Check if first non-whitespace character is a valid start
 		char c = buf[pos];
-		if (c == '{')
+		switch (c)
 		{
+		case '{':
 			state = ParseState::JSON;
-			line += c;
 			count = 1;
-		}
-		else if (c == '\\')
-		{
+			break;
+		case '\\':
 			state = ParseState::TAG_BLOCK;
-			line += c;
-		}
-		else if (c == '$' || c == '!')
-		{
+			break;
+		case '$':
+		case '!':
 			state = ParseState::NMEA;
-			line += c;
-		}
-		else if ((unsigned char)c == 0xac)
-		{
+			break;
+		case (char)0xac:
 			state = ParseState::BINARY;
-			line += c;
-		}
-		else
-		{
-			// Not a valid start — skip rest of line
+			break;
+		default:
 			state = ParseState::SKIP_TO_EOL;
 			return;
 		}
+		line += c;
 		pos++;
 	}
 
@@ -1010,13 +975,10 @@ namespace AIS
 		int limit = MIN(bufsize, pos + (int)(MAX_NMEA_LINE + 1 - line.size()));
 		int start = pos;
 
-		while (pos < limit)
-		{
-			char c = buf[pos];
-			if (c == '\r' || c == '\n')
-				break;
+		// NMEA sentences and tag blocks contain no whitespace; break on any byte <= ' '.
+		SWAR_SKIP_AT(buf, pos, limit, SWAR::has_byte_lt(word, 0x21))
+		while (pos < limit && (unsigned char)buf[pos] > ' ')
 			pos++;
-		}
 
 		if (pos > start)
 			line.append(buf + start, pos - start);
@@ -1046,12 +1008,28 @@ namespace AIS
 		}
 	}
 
+	__attribute__((noinline, cold)) void NMEA::warnAIS(int bit, const char *msg, const std::string &ctx)
+	{
+		if (shouldWarn(bit))
+			Warning() << "AIS: " << msg << " [" << ctx.substr(0, 20) << "...]";
+	}
+
+	__attribute__((noinline, cold)) void NMEA::warnJSONControlChar()
+	{
+		if (shouldWarn(WARN_JSON_NEWLINE))
+			Warning() << "NMEA: newline in uncompleted JSON input";
+		reset();
+	}
+
 	void NMEA::scanJSON(TAG &tag)
 	{
 		int limit = MIN(bufsize, pos + (int)(MAX_JSON_LINE + 1 - line.size()));
 		int start = pos;
 
-		SWAR_SKIP(buf, pos, limit, C('{') || C('}') || C('\r') || C('\n') || C('\t') || C('\0'))
+		SWAR_SKIP_AT(buf, pos, limit,
+			SWAR::has_byte(word, SWAR::mask('{'))
+			| SWAR::has_byte(word, SWAR::mask('}'))
+			| SWAR::has_byte_lt(word, 0x20))
 
 		while (pos < limit)
 		{
@@ -1072,12 +1050,9 @@ namespace AIS
 					return;
 				}
 			}
-			else if (c == '\r' || c == '\n' || c == '\t' || c == '\0')
+			else if ((unsigned char)c < 0x20)
 			{
-				if (shouldWarn(WARN_JSON_NEWLINE))
-					Warning() << "NMEA: newline in uncompleted JSON input";
-
-				reset();
+				warnJSONControlChar();
 				return;
 			}
 		}
@@ -1098,7 +1073,7 @@ namespace AIS
 		int limit = MIN(bufsize, pos + (int)(MAX_BINARY_LINE + 1 - line.size()));
 		int start = pos;
 
-		SWAR_SKIP(buf, pos, limit, C('\n'))
+		SWAR_SKIP_AT(buf, pos, limit, SWAR::has_byte(word, SWAR::mask('\n')))
 
 		while (pos < limit)
 		{

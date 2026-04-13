@@ -99,15 +99,26 @@ namespace JSON
 		}
 
 		[[noreturn]] void error(const std::string &err, int pos);
+		[[noreturn]] __attribute__((noinline, cold)) void error(const char *err, int pos);
 
 		// tokenizer
-		void skip_whitespace();
+		void skip_whitespace()
+		{
+			while (p < pend && (unsigned char)*p <= ' ')
+				p++;
+		}
 		void next();
+		void next_key();
+		__attribute__((noinline, cold)) void parse_string_escaped();
 
 		// parser
 		[[noreturn]] void error_parser(const std::string &err);
-		bool is_match(TokenType t);
-		void must_match(TokenType t, const std::string &err);
+		bool is_match(TokenType t) { return currentType == t; }
+		void must_match(TokenType t, const std::string &err)
+		{
+			if (currentType != t)
+				error_parser(err);
+		}
 		int search();
 		std::string tokenString() const;
 		void parse_into_core(JSON *o, Pool *pool);

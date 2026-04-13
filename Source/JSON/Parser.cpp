@@ -22,10 +22,31 @@
 #include <cstdlib>
 
 #include "Parser.h"
+#include "Keys.h"
+#include "SWAR.h"
+
+// Verification mode: also run the authoritative linear search and assert the
+// fast path returns the same value. Turn off for production after validation.
+#define VERIFY_KEY_LOOKUP 0
 
 namespace JSON
 {
 	KeyHashTable Parser::keyLookup;
+
+	// Generated from KeyDefs.h — one branch per X() entry whose input dict
+	// field is non-empty. The `sizeof(input) > 1` guard lets the compiler
+	// dead-code-eliminate the ~470 empty-input branches at compile time.
+	// Each remaining memcmp is folded into constant-size integer compares.
+	static inline int lookupInputKey(const char *s, int len)
+	{
+#define X(name, full, min, sparse, aprs, setting, input, unit, desc, lookup) \
+	if (sizeof(input) > 1 && sizeof(input) - 1 == (size_t)len &&             \
+		memcmp(s, input, sizeof(input) - 1) == 0)                            \
+		return AIS::name;
+#include "KeyDefs.h"
+#undef X
+		return -1;
+	}
 
 	// Parser -- Build JSON object from String
 
@@ -51,47 +72,12 @@ namespace JSON
 		throw std::runtime_error("syntax error in JSON: " + err);
 	}
 
-	// Adaptive scanning helpers (size_t: 4 bytes on 32-bit, 8 bytes on 64-bit)
-
-	static constexpr size_t SWAR_ONES = ~(size_t)0 / 255;
-	static constexpr size_t SWAR_HIGHS = SWAR_ONES * 128;
-
-	static constexpr size_t swar_mask(char target)
+	[[noreturn]] void Parser::error(const char *err, int pos)
 	{
-		return SWAR_ONES * (unsigned char)target;
-	}
-
-	static inline size_t has_byte(size_t word, size_t mask)
-	{
-		size_t v = word ^ mask;
-		return (v - SWAR_ONES) & ~v & SWAR_HIGHS;
-	}
-
-	static inline int first_byte_pos(size_t mask)
-	{
-#if defined(__GNUC__) || defined(__clang__)
-		if (sizeof(size_t) == 8)
-			return __builtin_ctzll((unsigned long long)mask) >> 3;
-		else
-			return __builtin_ctz((unsigned int)mask) >> 3;
-#else
-		int n = 0;
-		while (!(mask & 0xFF))
-		{
-			mask >>= 8;
-			n++;
-		}
-		return n;
-#endif
+		error(std::string(err), pos);
 	}
 
 	// JIT Tokenizer - lexes one token per call
-
-	void Parser::skip_whitespace()
-	{
-		while (p < pend && (unsigned char)*p <= ' ')
-			p++;
-	}
 
 	void Parser::next()
 	{
@@ -170,112 +156,27 @@ namespace JSON
 		{
 			p++;
 			tokenStart = p;
-			tokenEscaped = false;
 
-			// Word-sized fast scan
-			constexpr size_t m_quote = swar_mask('"'), m_bslash = swar_mask('\\');
-			constexpr size_t m_lf = swar_mask('\n'), m_cr = swar_mask('\r');
+			// Word-sized fast scan: stop on '"' (end of string), '\\' (escape),
+			// or any byte < 0x20 (control char, illegal unescaped per JSON spec).
+			constexpr size_t m_quote = SWAR::mask('"');
+			constexpr size_t m_bslash = SWAR::mask('\\');
 
-			while (p + sizeof(size_t) <= pend)
-			{
-				size_t chunk;
-				memcpy(&chunk, p, sizeof(size_t));
-
-				size_t special = has_byte(chunk, m_quote) | has_byte(chunk, m_bslash) | has_byte(chunk, m_lf) | has_byte(chunk, m_cr);
-				if (special)
-				{
-					p += first_byte_pos(special);
-					goto found_special;
-				}
-				p += sizeof(size_t);
-			}
-
-			// tail bytes
-			while (p < pend && *p != '\"' && *p != '\\' && *p != '\n' && *p != '\r')
+			SWAR_SKIP_PTR(p, pend,
+				SWAR::has_byte(word, m_quote)
+				| SWAR::has_byte(word, m_bslash)
+				| SWAR::has_byte_lt(word, 0x20))
+			while (p < pend && *p != '\"' && *p != '\\' && (unsigned char)*p >= 0x20)
 				p++;
 
-		found_special:
-			if (p < pend && *p == '\\')
-				tokenEscaped = true;
-
-			if (!tokenEscaped)
+			if (p < pend && *p == '\"')
 			{
 				tokenEnd = p;
-				if (p == pend || *p != '\"')
-					error("line ends in string literal", (int)(p - p_start));
 				p++;
 			}
 			else
 			{
-				escapedText.clear();
-				escapedText.append(tokenStart, p - tokenStart);
-
-				while (p != pend && *p != '\"' && *p != '\n' && *p != '\r')
-				{
-					char ch = *p;
-					if (ch == '\\')
-					{
-						if (++p == pend)
-							error("line ends in string literal escape sequence", (int)(p - p_start));
-						ch = *p;
-						switch (ch)
-						{
-						case '\"':
-						case '\\':
-						case '/':
-							break;
-						case 'b':
-							ch = '\b';
-							break;
-						case 'f':
-							ch = '\f';
-							break;
-						case 'n':
-							ch = '\n';
-							break;
-						case 'r':
-							ch = '\r';
-							break;
-						case 't':
-							ch = '\t';
-							break;
-						case 'u':
-						{
-							if (p + 4 >= pend)
-								error("line ends in string literal unicode escape sequence", (int)(p - p_start));
-							int cp = 0;
-							for (int i = 1; i <= 4; i++)
-							{
-								char h = p[i];
-								int d;
-								if (h >= '0' && h <= '9')
-									d = h - '0';
-								else if (h >= 'a' && h <= 'f')
-									d = h - 'a' + 10;
-								else if (h >= 'A' && h <= 'F')
-									d = h - 'A' + 10;
-								else
-									error("illegal unicode escape sequence", (int)(p - p_start));
-								cp = (cp << 4) | d;
-							}
-							ch = (char)cp;
-							p += 4;
-							break;
-						}
-						default:
-							error("illegal escape sequence " + std::to_string((int)(ch)), (int)(p - p_start));
-						}
-					}
-					escapedText += ch;
-					p++;
-				}
-
-				tokenStart = nullptr;
-				tokenEnd = nullptr;
-
-				if (p == pend || *p != '\"')
-					error("line ends in string literal", (int)(p - p_start));
-				p++;
+				parse_string_escaped(); // handles '\\', control chars, EOF
 			}
 
 			currentType = TokenType::String;
@@ -331,9 +232,129 @@ namespace JSON
 		}
 
 		default:
-			error("illegal character '" + std::string(1, c) + "'", (int)(p - p_start));
+			error("illegal character", (int)(p - p_start));
 			break;
 		}
+	}
+
+	// Cold path: decode a string literal that contains escape sequences.
+	// Entered with p pointing at the first '\\' inside the string, tokenStart
+	// at the opening-quote+1. On return, escapedText holds the decoded value,
+	// p is past the closing quote, and tokenStart/tokenEnd are nulled.
+	void Parser::parse_string_escaped()
+	{
+		escapedText.clear();
+		escapedText.append(tokenStart, p - tokenStart);
+
+		while (p != pend && *p != '\"' && *p != '\n' && *p != '\r')
+		{
+			char ch = *p;
+			if (ch == '\\')
+			{
+				if (++p == pend)
+					error("line ends in string literal escape sequence", (int)(p - p_start));
+				ch = *p;
+				switch (ch)
+				{
+				case '\"':
+				case '\\':
+				case '/':
+					break;
+				case 'b':
+					ch = '\b';
+					break;
+				case 'f':
+					ch = '\f';
+					break;
+				case 'n':
+					ch = '\n';
+					break;
+				case 'r':
+					ch = '\r';
+					break;
+				case 't':
+					ch = '\t';
+					break;
+				case 'u':
+				{
+					if (p + 4 >= pend)
+						error("line ends in string literal unicode escape sequence", (int)(p - p_start));
+					int cp = 0;
+					for (int i = 1; i <= 4; i++)
+					{
+						char h = p[i];
+						int d;
+						if (h >= '0' && h <= '9')
+							d = h - '0';
+						else if (h >= 'a' && h <= 'f')
+							d = h - 'a' + 10;
+						else if (h >= 'A' && h <= 'F')
+							d = h - 'A' + 10;
+						else
+							error("illegal unicode escape sequence", (int)(p - p_start));
+						cp = (cp << 4) | d;
+					}
+					ch = (char)cp;
+					p += 4;
+					break;
+				}
+				default:
+					error("illegal escape sequence", (int)(p - p_start));
+				}
+			}
+			escapedText += ch;
+			p++;
+		}
+
+		tokenStart = nullptr;
+		tokenEnd = nullptr;
+
+		if (p == pend || *p != '\"')
+			error("line ends in string literal", (int)(p - p_start));
+		p++;
+	}
+
+	// Specialized tokenizer for object-member position: the next token must be
+	// a string key or '}'. Skips escape detection — keys never contain escapes
+	// in this protocol — so the SWAR scan only watches for the closing quote.
+	void Parser::next_key()
+	{
+		skip_whitespace();
+
+		if (p >= pend)
+		{
+			currentType = TokenType::End;
+			tokenStart = tokenEnd = p;
+			return;
+		}
+
+		char c = *p;
+		if (c == '}')
+		{
+			currentType = TokenType::RightBrace;
+			p++;
+			return;
+		}
+		if (c != '\"')
+		{
+			next();
+			return;
+		}
+
+		p++;
+		tokenStart = p;
+		tokenEscaped = false;
+
+		constexpr size_t m_quote = SWAR::mask('"');
+		SWAR_SKIP_PTR(p, pend, SWAR::has_byte(word, m_quote))
+		while (p < pend && *p != '\"')
+			p++;
+
+		tokenEnd = p;
+		if (p == pend)
+			error("line ends in string literal", (int)(p - p_start));
+		p++;
+		currentType = TokenType::String;
 	}
 
 	// Parsing functions
@@ -341,17 +362,6 @@ namespace JSON
 	[[noreturn]] void Parser::error_parser(const std::string &err)
 	{
 		error(err, (int)(tokenStart - p_start));
-	}
-
-	bool Parser::is_match(TokenType t)
-	{
-		return currentType == t;
-	}
-
-	void Parser::must_match(TokenType t, const std::string &err)
-	{
-		if (currentType != t)
-			error_parser(err);
 	}
 
 	std::string Parser::tokenString() const
@@ -368,7 +378,18 @@ namespace JSON
 			const char *str = tokenEscaped ? escapedText.data() : tokenStart;
 			int len = tokenEscaped ? (int)escapedText.size() : (int)(tokenEnd - tokenStart);
 
-			return keyLookup.find(hashRange(str, len), str, len);
+			int fast = lookupInputKey(str, len);
+#if VERIFY_KEY_LOOKUP
+			int slow = linearSearch();
+			if (fast != slow)
+			{
+				throw std::runtime_error(
+					"key lookup mismatch: fast=" + std::to_string(fast) +
+					" slow=" + std::to_string(slow) +
+					" key=\"" + std::string(str, (size_t)len) + "\"");
+			}
+#endif
+			return fast;
 		}
 
 		return linearSearch();
@@ -552,7 +573,7 @@ namespace JSON
 	void Parser::parse_into_core(JSON *o, Pool *pool)
 	{
 		must_match(TokenType::LeftBrace, "expected '{'");
-		next();
+		next_key();
 
 		while (is_match(TokenType::String))
 		{
@@ -573,7 +594,7 @@ namespace JSON
 
 			if (!is_match(TokenType::Comma))
 				break;
-			next();
+			next_key();
 			if (!is_match(TokenType::String))
 				error_parser("comma needs to be followed by property");
 		}

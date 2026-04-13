@@ -120,18 +120,49 @@ namespace JSON
 			ptr += n;
 		}
 
+		// Two-digit ASCII table: digits100()[2*n .. 2*n+1] = the two decimal
+		// digits of n for n in [0, 99]. Used by put_uint_raw and the
+		// fractional block of put_float_raw to emit two digits per iteration
+		// (one div/mod by 100 instead of two by 10). Function-local static
+		// keeps this header-only under C++11 (no inline variables).
+		static const char *digits100()
+		{
+			static constexpr char t[201] =
+				"0001020304050607080910111213141516171819"
+				"2021222324252627282930313233343536373839"
+				"4041424344454647484950515253545556575859"
+				"6061626364656667686970717273747576777879"
+				"8081828384858687888990919293949596979899";
+			return t;
+		}
+
 		// Up to 20 decimal digits. Caller must have reserved >= 20.
 		inline void put_uint_raw(unsigned long long v)
 		{
 			char tmp[20];
-			int len = 0;
-			do
+			char *const end_tmp = tmp + 20;
+			char *p = end_tmp;
+			while (v >= 100)
 			{
-				tmp[len++] = (char)('0' + (int)(v % 10));
-				v /= 10;
-			} while (v);
-			for (int i = len - 1; i >= 0; i--)
-				*ptr++ = tmp[i];
+				unsigned two = (unsigned)(v % 100);
+				v /= 100;
+				p -= 2;
+				p[0] = digits100()[two * 2];
+				p[1] = digits100()[two * 2 + 1];
+			}
+			if (v >= 10)
+			{
+				p -= 2;
+				p[0] = digits100()[v * 2];
+				p[1] = digits100()[v * 2 + 1];
+			}
+			else
+			{
+				*--p = (char)('0' + (int)v);
+			}
+			size_t n = (size_t)(end_tmp - p);
+			memcpy(ptr, p, n);
+			ptr += n;
 		}
 
 		// Optional sign + up to 20 digits. Caller must have reserved >= 21.
@@ -185,17 +216,17 @@ namespace JSON
 				return;
 
 			*ptr++ = '.';
-			ptr[5] = (char)('0' + frac % 10);
-			frac /= 10;
-			ptr[4] = (char)('0' + frac % 10);
-			frac /= 10;
-			ptr[3] = (char)('0' + frac % 10);
-			frac /= 10;
-			ptr[2] = (char)('0' + frac % 10);
-			frac /= 10;
-			ptr[1] = (char)('0' + frac % 10);
-			frac /= 10;
-			ptr[0] = (char)('0' + frac);
+			// frac in [1, 999999]: emit as three 2-digit pairs via table.
+			unsigned f = (unsigned)frac;
+			unsigned a = f / 10000;        // 00..99
+			unsigned b = (f / 100) % 100;  // 00..99
+			unsigned c = f % 100;          // 00..99
+			ptr[0] = digits100()[a * 2];
+			ptr[1] = digits100()[a * 2 + 1];
+			ptr[2] = digits100()[b * 2];
+			ptr[3] = digits100()[b * 2 + 1];
+			ptr[4] = digits100()[c * 2];
+			ptr[5] = digits100()[c * 2 + 1];
 			ptr += 6;
 			// Trim trailing zeros. Safe: the frac == 0 early-return
 			// guarantees at least one non-zero digit remains.

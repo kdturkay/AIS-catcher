@@ -65,7 +65,11 @@ namespace JSON
 		bool getBool(bool d = false) const { return isBool() ? data.b : d; }
 		const std::vector<std::string> &getStringArray() const { return *data.as; }
 		const std::vector<Value> &getArray() const { return *data.a; }
-		const std::string getString() const { return isString() ? *data.s : std::string(""); }
+		const std::string &getString() const
+		{
+			static const std::string empty;
+			return isString() ? *data.s : empty;
+		}
 		const std::string &getStringRef() const { return *data.s; }
 		const JSON &getObject() const { return *data.o; }
 
@@ -206,45 +210,45 @@ namespace JSON
 
 		void Add(int p, int v)
 		{
-			members.push_back(Member(p, (long int)v));
+			members.emplace_back(p, (long int)v);
 		}
 
 		void Add(int p, double v)
 		{
-			members.push_back(Member(p, (double)v));
+			members.emplace_back(p, (double)v);
 		}
 
 		void Add(int p, bool v)
 		{
-			members.push_back(Member(p, (bool)v));
+			members.emplace_back(p, (bool)v);
 		}
 
 		void Add(int p, JSON *v)
 		{
-			members.push_back(Member(p, v));
+			members.emplace_back(p, v);
 		}
 
 		void Add(int p, const std::string &v, Pool &pool);
 
 		void Add(int p)
 		{
-			members.push_back(Member(p));
+			members.emplace_back(p);
 		}
 
 		void Add(int p, Value v)
 		{
-			members.push_back(Member(p, (Value)v));
+			members.emplace_back(p, (Value)v);
 		}
 
 		// for items where memory is managed outside the object
 		void Add(int p, const std::string *v)
 		{
-			members.push_back(Member(p, (std::string *)v));
+			members.emplace_back(p, (std::string *)v);
 		}
 
 		void Add(int p, const std::vector<std::string> *v)
 		{
-			members.push_back(Member(p, (std::vector<std::string> *)v));
+			members.emplace_back(p, (std::vector<std::string> *)v);
 		}
 	};
 
@@ -306,7 +310,7 @@ namespace JSON
 
 	inline void JSON::Add(int p, const std::string &v, Pool &pool)
 	{
-		members.push_back(Member(p, pool.addString(v)));
+		members.emplace_back(p, pool.addString(v));
 	}
 
 	// Document: owns a root JSON and its pool

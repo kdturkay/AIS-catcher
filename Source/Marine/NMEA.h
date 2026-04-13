@@ -120,6 +120,8 @@ namespace AIS
 		void scanLine(TAG &tag);
 		void scanJSON(TAG &tag);
 		void scanBinary(TAG &tag);
+		void warnJSONControlChar();
+		void warnAIS(int bit, const char *msg, const std::string &ctx);
 		int own_mmsi = -1;
 
 		std::vector<AIVDM> queue;
