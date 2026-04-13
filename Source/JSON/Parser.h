@@ -26,14 +26,6 @@
 #include "JSON.h"
 #include "Keys.h"
 
-#if defined(__GNUC__) || defined(__clang__)
-#define AISC_COLD_NOINLINE __attribute__((noinline, cold))
-#elif defined(_MSC_VER)
-#define AISC_COLD_NOINLINE __declspec(noinline)
-#else
-#define AISC_COLD_NOINLINE
-#endif
-
 namespace JSON
 {
 	class Parser

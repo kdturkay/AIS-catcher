@@ -149,6 +149,8 @@
     <ClInclude Include="..\Source\Utilities\PackedInt.h" />
     <ClInclude Include="..\Source\Utilities\TemplateString.h" />
     <ClInclude Include="..\Source\Library\TCP.h" />
+    <ClInclude Include="..\Source\Library\SWAR.h" />
+    <ClInclude Include="..\Source\IO\OutputStats.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

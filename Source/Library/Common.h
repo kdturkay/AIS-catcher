@@ -38,6 +38,14 @@
 #define DBG(msg)
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+#define AISC_COLD_NOINLINE __attribute__((noinline, cold))
+#elif defined(_MSC_VER)
+#define AISC_COLD_NOINLINE __declspec(noinline)
+#else
+#define AISC_COLD_NOINLINE
+#endif
+
 class tN2kMsg;
 
 void StopRequest();
