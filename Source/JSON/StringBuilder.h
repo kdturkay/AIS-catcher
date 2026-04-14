@@ -247,6 +247,8 @@ namespace JSON
 
 		// Short-run memcpy that lets the compiler emit fixed-size ldr/str pairs
 		// instead of a _memcpy stub call. Hot on JSON key/value writes.
+		// [1..8]: size-specialized. [9..16]: two overlapping 8-byte copies
+		// (branch-free). Default: fall back to memcpy.
 		inline void put_bytes_short(const char *s, size_t n)
 		{
 			switch (n)
@@ -260,6 +262,14 @@ namespace JSON
 			case 6: std::memcpy(ptr, s, 6); break;
 			case 7: std::memcpy(ptr, s, 7); break;
 			case 8: std::memcpy(ptr, s, 8); break;
+			case 9:  std::memcpy(ptr, s, 9);  break;
+			case 10: std::memcpy(ptr, s, 10); break;
+			case 11: std::memcpy(ptr, s, 11); break;
+			case 12: std::memcpy(ptr, s, 12); break;
+			case 13: std::memcpy(ptr, s, 13); break;
+			case 14: std::memcpy(ptr, s, 14); break;
+			case 15: std::memcpy(ptr, s, 15); break;
+			case 16: std::memcpy(ptr, s, 16); break;
 			default: std::memcpy(ptr, s, n); break;
 			}
 			ptr += n;
@@ -371,10 +381,6 @@ namespace JSON
 		{
 			target = &dst;
 			start_off = dst.size();
-			// resize() zero-fills newly-added bytes. Resize only to
-			// start_off + headroom, not dst.capacity(), so we don't
-			// memset the whole reused buffer each call. grow() extends
-			// as needed and zero-fills only the growth delta.
 			if (dst.capacity() < start_off + headroom)
 				dst.reserve(start_off + headroom);
 			AISC_STRING_RESIZE_UNINIT(dst, start_off + headroom);
