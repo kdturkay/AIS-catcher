@@ -106,7 +106,7 @@ namespace JSON
 			size_t nsz = cur * 2;
 			if (nsz < need)
 				nsz = need + 64;
-			target->resize(nsz);
+			AISC_STRING_RESIZE_UNINIT(*target, nsz);
 			ptr = &(*target)[0] + used;
 			end = &(*target)[0] + nsz;
 		}
@@ -245,12 +245,31 @@ namespace JSON
 			need_sep = false;
 		}
 
+		// Short-run memcpy that lets the compiler emit fixed-size ldr/str pairs
+		// instead of a _memcpy stub call. Hot on JSON key/value writes.
+		inline void put_bytes_short(const char *s, size_t n)
+		{
+			switch (n)
+			{
+			case 0: break;
+			case 1: ptr[0] = s[0]; break;
+			case 2: std::memcpy(ptr, s, 2); break;
+			case 3: std::memcpy(ptr, s, 3); break;
+			case 4: std::memcpy(ptr, s, 4); break;
+			case 5: std::memcpy(ptr, s, 5); break;
+			case 6: std::memcpy(ptr, s, 6); break;
+			case 7: std::memcpy(ptr, s, 7); break;
+			case 8: std::memcpy(ptr, s, 8); break;
+			default: std::memcpy(ptr, s, n); break;
+			}
+			ptr += n;
+		}
+
 		// Writes "key":. Caller must have reserved >= klen + 3.
 		inline void put_kvkey_raw(const char *k, size_t klen)
 		{
 			*ptr++ = '"';
-			memcpy(ptr, k, klen);
-			ptr += klen;
+			put_bytes_short(k, klen);
 			*ptr++ = '"';
 			*ptr++ = ':';
 		}
@@ -283,9 +302,7 @@ namespace JSON
 				}
 				if (s > start)
 				{
-					size_t n = (size_t)(s - start);
-					memcpy(ptr, start, n);
-					ptr += n;
+					put_bytes_short(start, (size_t)(s - start));
 				}
 				switch (c)
 				{
@@ -350,13 +367,17 @@ namespace JSON
 		}
 
 	public:
-		explicit Writer(std::string &dst, size_t headroom = 4096)
+		explicit Writer(std::string &dst, size_t headroom = 1024)
 		{
 			target = &dst;
 			start_off = dst.size();
+			// resize() zero-fills newly-added bytes. Resize only to
+			// start_off + headroom, not dst.capacity(), so we don't
+			// memset the whole reused buffer each call. grow() extends
+			// as needed and zero-fills only the growth delta.
 			if (dst.capacity() < start_off + headroom)
 				dst.reserve(start_off + headroom);
-			dst.resize(dst.capacity());
+			AISC_STRING_RESIZE_UNINIT(dst, start_off + headroom);
 			ptr = &dst[0] + start_off;
 			end = &dst[0] + dst.size();
 		}

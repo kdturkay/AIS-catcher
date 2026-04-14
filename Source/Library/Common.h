@@ -46,6 +46,24 @@
 #define AISC_COLD_NOINLINE
 #endif
 
+// Resize std::string to `n` bytes without zero-filling the tail, when the
+// toolchain exposes a non-zeroing resize. Contents past the previous size
+// are indeterminate — only use when the caller fully overwrites them.
+// CMake probes for these and defines HAS_* accordingly.
+#if defined(HAS_STD_RESIZE_AND_OVERWRITE)
+#define AISC_STRING_RESIZE_UNINIT(str, n)          \
+	(str).resize_and_overwrite((n),                \
+		[](char *, std::size_t _n) { return _n; })
+#elif defined(HAS_LIBCXX_RESIZE_DEFAULT_INIT)
+#define AISC_STRING_RESIZE_UNINIT(str, n) (str).__resize_default_init((n))
+#elif defined(HAS_LIBSTDCXX_RESIZE_AND_OVERWRITE)
+#define AISC_STRING_RESIZE_UNINIT(str, n)          \
+	(str).__resize_and_overwrite((n),              \
+		[](char *, std::size_t _n) { return _n; })
+#else
+#define AISC_STRING_RESIZE_UNINIT(str, n) (str).resize((n))
+#endif
+
 class tN2kMsg;
 
 void StopRequest();

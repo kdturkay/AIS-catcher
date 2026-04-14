@@ -449,7 +449,8 @@ namespace AIS
 		constexpr int WORD_BITS = CHARS_PER * 8;
 
 		const int nchars = (len + 5) / 6;
-		str.resize(nchars);
+		// Upper bound; `last_nonspace` trims uninitialized tail past the terminator.
+		AISC_STRING_RESIZE_UNINIT(str, nchars);
 		char *p = &str[0];
 		int n = 0, last_nonspace = 0;
 
@@ -572,7 +573,8 @@ namespace AIS
 		for (int s = 0, l = 0; s < nSentences; s++)
 		{
 			std::string &out = NMEA[s];
-			out.resize(128);
+			// Upper bound; trimmed to `i` after writing; interior bytes fully overwritten.
+			AISC_STRING_RESIZE_UNINIT(out, 128);
 			char *p = &out[0];
 
 			std::memcpy(p, "!AIVDM,X,X,X,X,", 11);

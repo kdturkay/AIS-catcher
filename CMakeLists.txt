@@ -107,6 +107,45 @@ set(CMAKE_CXX_FLAGS "${OPTIMIZATION_FLAGS}")
 include(FindPkgConfig)
 include(CheckIncludeFile)
 include(CheckSymbolExists)
+include(CheckCXXSourceCompiles)
+
+# Detect non-zeroing std::string resize variants so StringBuilder can avoid
+# memset-on-resize in its Writer hot path.
+check_cxx_source_compiles("
+    #include <string>
+    int main() {
+        std::string s;
+        s.resize_and_overwrite(16, [](char*, std::size_t n){ return n; });
+        return 0;
+    }
+" HAS_STD_RESIZE_AND_OVERWRITE)
+if(HAS_STD_RESIZE_AND_OVERWRITE)
+    add_definitions(-DHAS_STD_RESIZE_AND_OVERWRITE)
+endif()
+
+check_cxx_source_compiles("
+    #include <string>
+    int main() {
+        std::string s;
+        s.__resize_default_init(16);
+        return 0;
+    }
+" HAS_LIBCXX_RESIZE_DEFAULT_INIT)
+if(HAS_LIBCXX_RESIZE_DEFAULT_INIT)
+    add_definitions(-DHAS_LIBCXX_RESIZE_DEFAULT_INIT)
+endif()
+
+check_cxx_source_compiles("
+    #include <string>
+    int main() {
+        std::string s;
+        s.__resize_and_overwrite(16, [](char*, std::size_t n){ return n; });
+        return 0;
+    }
+" HAS_LIBSTDCXX_RESIZE_AND_OVERWRITE)
+if(HAS_LIBSTDCXX_RESIZE_AND_OVERWRITE)
+    add_definitions(-DHAS_LIBSTDCXX_RESIZE_AND_OVERWRITE)
+endif()
 
 # Use pkg-config
 find_package(Threads)
