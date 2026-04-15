@@ -158,6 +158,7 @@ public:
 	{
 		if (use_GPS)
 		{
+			std::lock_guard<std::mutex> lock(mtx);
 			lat = data[0].getLat();
 			lon = data[0].getLon();
 		}

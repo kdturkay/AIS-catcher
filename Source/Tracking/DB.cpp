@@ -867,31 +867,42 @@ bool DB::updateFields(const JSON::Member &p, const AIS::Message *msg, Ship &v, b
 	case AIS::KEY_MANEUVER:
 		v.setManeuver(p.Get().getInt()); // 0=not available, 1=no special, 2=special (direct value)
 		break;
-#pragma GCC diagnostic push
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wstringop-truncation"
-#endif
 	case AIS::KEY_NAME:
 	case AIS::KEY_SHIPNAME:
-		std::strncpy(v.shipname, p.Get().getString().c_str(), sizeof(v.shipname) - 1);
-		v.shipname[sizeof(v.shipname) - 1] = '\0';
+	{
+		const std::string &s = p.Get().getString();
+		size_t n = MIN(s.size(), sizeof(v.shipname) - 1);
+		std::memcpy(v.shipname, s.data(), n);
+		v.shipname[n] = '\0';
 		staticUpdated = true;
 		break;
+	}
 	case AIS::KEY_CALLSIGN:
-		std::strncpy(v.callsign, p.Get().getString().c_str(), sizeof(v.callsign) - 1);
-		v.callsign[sizeof(v.callsign) - 1] = '\0';
+	{
+		const std::string &s = p.Get().getString();
+		size_t n = MIN(s.size(), sizeof(v.callsign) - 1);
+		std::memcpy(v.callsign, s.data(), n);
+		v.callsign[n] = '\0';
 		staticUpdated = true;
 		break;
+	}
 	case AIS::KEY_COUNTRY_CODE:
-		std::strncpy(v.country_code, p.Get().getString().c_str(), sizeof(v.country_code) - 1);
-		v.country_code[sizeof(v.country_code) - 1] = '\0';
+	{
+		const std::string &s = p.Get().getString();
+		size_t n = MIN(s.size(), sizeof(v.country_code) - 1);
+		std::memcpy(v.country_code, s.data(), n);
+		v.country_code[n] = '\0';
 		break;
+	}
 	case AIS::KEY_DESTINATION:
-		std::strncpy(v.destination, p.Get().getString().c_str(), sizeof(v.destination) - 1);
-		v.destination[sizeof(v.destination) - 1] = '\0';
+	{
+		const std::string &s = p.Get().getString();
+		size_t n = MIN(s.size(), sizeof(v.destination) - 1);
+		std::memcpy(v.destination, s.data(), n);
+		v.destination[n] = '\0';
 		staticUpdated = true;
 		break;
-#pragma GCC diagnostic pop
+	}
 	}
 	return position_updated;
 }
@@ -1058,7 +1069,7 @@ void DB::Receive(const JSON::JSON *data, int len, TAG &tag)
 	if (!filter.include(*(AIS::Message *)data[0].binary))
 		return;
 
-	std::lock_guard<std::mutex> lock(mtx);
+	std::unique_lock<std::mutex> lock(mtx);
 
 	const AIS::Message *msg = (AIS::Message *)data[0].binary;
 	int type = msg->type();
@@ -1128,7 +1139,7 @@ void DB::Receive(const JSON::JSON *data, int len, TAG &tag)
 
 	tag.shipclass = ship.shipclass;
 	tag.speed = ship.speed;
-	std::strcpy(tag.shipname, ship.shipname);
+	std::memcpy(tag.shipname, ship.shipname, sizeof(tag.shipname));
 
 	if (position_updated && isValidCoord(lat_old, lon_old))
 	{
@@ -1145,6 +1156,7 @@ void DB::Receive(const JSON::JSON *data, int len, TAG &tag)
 		checkIntegrity();
 #endif
 
+	lock.unlock();
 	Send(data, len, tag);
 }
 

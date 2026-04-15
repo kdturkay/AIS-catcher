@@ -777,8 +777,7 @@ void WebViewer::connect(const std::vector<std::unique_ptr<Receiver>> &receivers)
 
 	if (receivers.size() > 1)
 	{
-		Debug() << "Mutex: WebViewer enabling exclusive on states[0]/raw_counter/planes (" << receivers.size() << " receivers)";
-		states[0]->setExclusive();
+		Debug() << "Mutex: WebViewer enabling exclusive on raw_counter/planes (" << receivers.size() << " receivers)";
 		raw_counter.setExclusive(true);
 		planes.setExclusive(true);
 	}
