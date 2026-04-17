@@ -396,8 +396,9 @@ namespace AIS
 			r += sizeof(size_t);
 		}
 
-		if (sizeof(size_t) == 8)
-			cs_acc ^= cs_acc >> 32;
+#if SIZE_MAX > 0xFFFFFFFFu
+		cs_acc ^= cs_acc >> 32;
+#endif
 		cs_acc ^= cs_acc >> 16;
 		cs_acc ^= cs_acc >> 8;
 		int cs = (int)(cs_acc & 0xFF);

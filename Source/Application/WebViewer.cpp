@@ -942,7 +942,7 @@ std::string WebViewer::buildStatJSON(ReceiverTracker *s)
 			o->writeJSON(w);
 	}
 	w.endArray();
-	w.kv("received", (unsigned long long)raw_counter.received.load(std::memory_order_relaxed));
+	w.kv("received", (unsigned long long)raw_counter.received());
 	w.endObject();
 
 	w.finish();

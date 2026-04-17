@@ -150,14 +150,6 @@ endif()
 # Use pkg-config
 find_package(Threads)
 
-if(NOT MSVC)
-    find_library(ATOMIC_LIB atomic)
-    if(ATOMIC_LIB)
-        message(STATUS "ATOMIC: linking libatomic (${ATOMIC_LIB})")
-        list(APPEND ADDITIONAL_LIBRARIES atomic)
-    endif()
-endif()
-
 if(MSVC)
     add_definitions(-DHASEVENTLOG)
 elseif(APPLE)

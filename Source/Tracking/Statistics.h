@@ -207,9 +207,30 @@ public:
 
 struct ByteCounter : public StreamIn<RAW> {
 	AIS::Filter filter;
+	// Split into two 32-bit atomics so armv6/armel don't need libatomic.
+	// received_hi counts 4 GB wraps of received_lo. Byte precision preserved.
+	std::atomic<uint32_t> received_lo{0};
+	std::atomic<uint32_t> received_hi{0};
 	virtual ~ByteCounter() {}
-	std::atomic<uint64_t> received{0};
-	void Receive(const RAW* data, int len, TAG& tag) { received.fetch_add(data[0].size, std::memory_order_relaxed); }
-	void Reset() { received.store(0, std::memory_order_relaxed); }
+
+	void Receive(const RAW* data, int len, TAG& tag) {
+		uint32_t add = (uint32_t)data[0].size;
+		uint32_t before = received_lo.fetch_add(add, std::memory_order_relaxed);
+		if (before + add < before)
+			received_hi.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	uint64_t received() const {
+		uint32_t h1 = received_hi.load(std::memory_order_relaxed);
+		uint32_t lo = received_lo.load(std::memory_order_relaxed);
+		uint32_t h2 = received_hi.load(std::memory_order_relaxed);
+		if (h1 != h2) lo = received_lo.load(std::memory_order_relaxed);
+		return ((uint64_t)h2 << 32) | lo;
+	}
+
+	void Reset() {
+		received_lo.store(0, std::memory_order_relaxed);
+		received_hi.store(0, std::memory_order_relaxed);
+	}
 	void setFilter(const AIS::Filter &f) { filter = f; }
 };
