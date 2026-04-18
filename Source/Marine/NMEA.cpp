@@ -260,7 +260,7 @@ namespace AIS
 		if (splitCount < min_fields || splitCount > max_fields)
 		{
 			if (shouldWarn(WARN_GPS_FIELD_COUNT))
-				Warning() << name << ": expected " << min_fields << " fields, got " << splitCount << " [" << s.substr(0, 20) << "...]";
+				Warning() << name << ": expected " << min_fields << " fields, got " << splitCount << " [" << s << "]";
 			return false;
 		}
 
@@ -269,7 +269,7 @@ namespace AIS
 		if (checksum != splitChecksum)
 		{
 			if (shouldWarn(WARN_GPS_CHECKSUM))
-				Warning() << name << ": checksum mismatch [" << s.substr(0, 20) << "...]";
+				Warning() << name << ": checksum mismatch [" << s << "]";
 			if (cfg_crc_check)
 				return false;
 		}
@@ -291,7 +291,7 @@ namespace AIS
 		if (error)
 		{
 			if (shouldWarn(WARN_GPS_COORDS))
-				Warning() << name << ": invalid coordinates [" << s.substr(0, 20) << "...]";
+				Warning() << name << ": invalid coordinates [" << s << "]";
 			return false;
 		}
 
@@ -615,7 +615,7 @@ namespace AIS
 		catch (std::exception const &e)
 		{
 			if (shouldWarn(WARN_JSON_PARSE))
-				Warning() << "JSON: " << e.what() << " [" << line.substr(0, 20) << "...]";
+				Warning() << "JSON: " << e.what() << " [" << line << "]";
 		}
 	}
 
@@ -784,7 +784,7 @@ namespace AIS
 		if (tagEnd >= len)
 		{
 			if (shouldWarn(WARN_TAG_NO_CLOSE))
-				Warning() << "tag block: no closing backslash [" << s.substr(0, 20) << "...]";
+				Warning() << "tag block: no closing backslash [" << s << "]";
 			return false;
 		}
 
@@ -1012,7 +1012,7 @@ namespace AIS
 	AISC_COLD_NOINLINE void NMEA::warnAIS(int bit, const char *msg, const std::string &ctx)
 	{
 		if (shouldWarn(bit))
-			Warning() << "AIS: " << msg << " [" << ctx.substr(0, 20) << "...]";
+			Warning() << "AIS: " << msg << " [" << ctx << "]";
 	}
 
 	AISC_COLD_NOINLINE void NMEA::warnJSONControlChar()
