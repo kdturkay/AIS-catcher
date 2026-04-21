@@ -388,6 +388,7 @@ namespace Protocol
 		void updateState();
 
 		void setStats(IO::OutputStats *s) { stats = s; }
+		void setVerifyCertificates(bool v) { verify_certificates = v; }
 	private:
 		bool performHandshake();
 		std::string getSSLErrorString(int error);
@@ -405,6 +406,7 @@ namespace Protocol
 		}
 
 		void setStats(IO::OutputStats *s) {}
+		void setVerifyCertificates(bool) {}
 	};
 #endif
 

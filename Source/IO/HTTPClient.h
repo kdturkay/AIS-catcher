@@ -69,6 +69,11 @@ namespace IO
 			userpwd = up;
 		}
 
+		void setVerifyCertificates(bool v)
+		{
+			tls.setVerifyCertificates(v);
+		}
+
 		void setURL(const std::string &url)
 		{
 			Util::Parse::HTTP_URL(url, protocol, host, port, path);

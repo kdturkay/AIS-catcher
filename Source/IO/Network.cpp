@@ -217,6 +217,14 @@ namespace IO
 			http.setUserPwd(arg);
 			userpwd = arg;
 			break;
+		case AIS::KEY_SETTING_SSL_VERIFY:
+		{
+			bool v = Util::Parse::Switch(arg);
+			http.setVerifyCertificates(v);
+			if (!v)
+				Warning() << "HTTP [" << url << "]: TLS certificate verification disabled (ssl_verify off)";
+			break;
+		}
 		case AIS::KEY_SETTING_ID:
 		case AIS::KEY_SETTING_CALLSIGN:
 		case AIS::KEY_SETTING_STATIONID:
