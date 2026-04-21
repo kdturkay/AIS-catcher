@@ -120,6 +120,7 @@ jobs:
         mv output/ais-catcher.deb ${{ env.filename }}
 
     - name: Upload to release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: gh release upload 'Edge' ${{ env.filename }} --repo ${{ github.repository }} --clobber
 
     - name: Upload artifact
@@ -180,6 +181,7 @@ jobs:
         mv output/ais-catcher.deb ${{ env.filename }}
 
     - name: Upload to release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: gh release upload 'Edge' ${{ env.filename }} --repo ${{ github.repository }} --clobber
 
     - name: Upload artifact
