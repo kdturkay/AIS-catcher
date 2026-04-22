@@ -4,6 +4,7 @@
 AIS-catcher
 gmon.out
 .vscode/
+.idea/
 debian/ais-catcher.debhelper.log
 debian/ais-catcher.substvars
 debian/changelog

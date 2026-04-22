@@ -120,6 +120,7 @@ jobs:
         mv output/ais-catcher.deb ${{ env.filename }}
 
     - name: Upload to release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: gh release upload 'Edge' ${{ env.filename }} --repo ${{ github.repository }} --clobber
 
     - name: Upload artifact
@@ -180,6 +181,7 @@ jobs:
         mv output/ais-catcher.deb ${{ env.filename }}
 
     - name: Upload to release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: gh release upload 'Edge' ${{ env.filename }} --repo ${{ github.repository }} --clobber
 
     - name: Upload artifact
@@ -414,6 +416,7 @@ jobs:
         path: output
 
     - name: Compress, upload, and delete ZIP file
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -456,6 +459,7 @@ jobs:
         path: output
 
     - name: Compress, upload, and delete ZIP file
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
