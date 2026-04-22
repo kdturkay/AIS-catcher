@@ -934,6 +934,7 @@ bool DB::updateShip(const JSON::JSON &data, TAG &tag, Ship &ship)
 	ship.group_mask |= tag.group;
 	ship.last_group = tag.group;
 
+	std::time_t prev_signal = ship.last_signal;
 	ship.last_signal = msg->getRxTimeUnix();
 
 	if (repeat == 0)
@@ -962,7 +963,12 @@ bool DB::updateShip(const JSON::JSON &data, TAG &tag, Ship &ship)
 
 	ship.setType();
 
-	if (staticUpdated)
+	// Ship came back into dashboard scope after being gone long enough that
+	// frontends will have dropped their cached entry. Replay static on the
+	// next incremental poll by bumping last_static_signal.
+	bool back_in_scope = prev_signal > 0 && ship.last_signal - prev_signal > TIME_HISTORY;
+
+	if (staticUpdated || (back_in_scope && ship.last_static_signal > 0))
 		ship.last_static_signal = ship.last_signal;
 
 	if (positionUpdated)
