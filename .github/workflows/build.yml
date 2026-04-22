@@ -416,6 +416,7 @@ jobs:
         path: output
 
     - name: Compress, upload, and delete ZIP file
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -458,6 +459,7 @@ jobs:
         path: output
 
     - name: Compress, upload, and delete ZIP file
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
